@@ -41,8 +41,16 @@ import { spawnClaude, abortClaudeSession } from './claude-cli.js';
 import gitRoutes from './routes/git.js';
 import authRoutes from './routes/auth.js';
 import mcpRoutes from './routes/mcp.js';
-import { initializeDatabase } from './database/db.js';
+import machineRoutes from './routes/machines.js';
+import settingsRoutes from './routes/settings.js';
+import { initializeDatabase, machineDb } from './database/db.js';
 import { validateApiKey, authenticateToken, authenticateWebSocket } from './middleware/auth.js';
+import { machineManager } from './machines/MachineManager.js';
+import { loadTokensIntoCache, createApiToken, revokeApiToken, getUserApiTokens } from './utils/apiTokens.js';
+import { machineRoutingMiddleware } from './middleware/machineRouting.js';
+import { PROTOCOL_VERSION, ClientMessageTypes, ServerMessageTypes, isCompatibleVersion } from '../shared/protocol.js';
+import { encryptionMiddleware, decryptionMiddleware, encryptWebSocketMessage, decryptWebSocketMessage } from './utils/encryption.js';
+import { userDb } from './database/db.js';
 
 // File system watcher for projects folder
 let projectsWatcher = null;
@@ -146,17 +154,9 @@ const wss = new WebSocketServer({
     const token = url.searchParams.get('token') || 
                   info.req.headers.authorization?.split(' ')[1];
     
-    // Verify token
-    const user = authenticateWebSocket(token);
-    if (!user) {
-      console.log('❌ WebSocket authentication failed');
-      return false;
-    }
-    
-    // Store user info in the request for later use
-    info.req.user = user;
-    console.log('✅ WebSocket authenticated for user:', user.username);
-    return true;
+    // Store token for later async verification
+    info.req.wsToken = token;
+    return true; // Allow connection, we'll verify async in the connection handler
   }
 });
 
@@ -175,6 +175,75 @@ app.use('/api/git', authenticateToken, gitRoutes);
 // MCP API Routes (protected)
 app.use('/api/mcp', authenticateToken, mcpRoutes);
 
+// Machine API Routes (protected)
+app.use('/api/machines', authenticateToken, machineRoutes);
+
+// Settings API Routes (protected)
+app.use('/api/settings', authenticateToken, settingsRoutes);
+
+// API Token Management Routes (protected)
+app.get('/api/tokens', authenticateToken, (req, res) => {
+  try {
+    const tokens = getUserApiTokens(req.user.id);
+    res.json(tokens);
+  } catch (error) {
+    console.error('Error fetching API tokens:', error);
+    res.status(500).json({ error: 'Failed to fetch API tokens' });
+  }
+});
+
+app.post('/api/tokens', authenticateToken, async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Token name is required' });
+    }
+    
+    const tokenData = await createApiToken(req.user.id, name.trim());
+    res.json(tokenData);
+  } catch (error) {
+    console.error('Error creating API token:', error);
+    res.status(500).json({ error: 'Failed to create API token' });
+  }
+});
+
+app.delete('/api/tokens/:tokenId', authenticateToken, async (req, res) => {
+  try {
+    const { tokenId } = req.params;
+    const result = await revokeApiToken(parseInt(tokenId), req.user.id);
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Token not found' });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error revoking API token:', error);
+    res.status(500).json({ error: 'Failed to revoke API token' });
+  }
+});
+
+// Apply encryption middleware to authenticated API endpoints
+// This must come after authentication but before route handlers
+app.use('/api', authenticateToken, async (req, res, next) => {
+  // Get user's encryption key for decryption/encryption
+  if (req.user && req.user.id) {
+    const encryptionKey = userDb.getEncryptionKey(req.user.id);
+    req.encryptionKey = encryptionKey;
+    
+    // Apply decryption middleware for incoming requests
+    decryptionMiddleware(encryptionKey)(req, res, () => {
+      // Apply encryption middleware for outgoing responses
+      encryptionMiddleware(encryptionKey)(req, res, next);
+    });
+  } else {
+    next();
+  }
+});
+
+// Apply machine routing middleware to all authenticated API endpoints
+// This must come after authentication and encryption but before the actual route handlers
+const machineRouter = machineRoutingMiddleware(machineManager);
+app.use('/api', authenticateToken, machineRouter);
+
 // Static files served after API routes
 app.use(express.static(path.join(__dirname, '../dist')));
 
@@ -183,11 +252,32 @@ app.get('/api/config', authenticateToken, (req, res) => {
   const host = req.headers.host || `${req.hostname}:${PORT}`;
   const protocol = req.protocol === 'https' || req.get('x-forwarded-proto') === 'https' ? 'wss' : 'ws';
   
-  console.log('Config API called - Returning host:', host, 'Protocol:', protocol);
+  // Get local IP address
+  const interfaces = os.networkInterfaces();
+  let localIP = 'localhost';
+  
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      // Skip internal and IPv6 addresses
+      if (iface.family === 'IPv4' && !iface.internal) {
+        localIP = iface.address;
+        break;
+      }
+    }
+    if (localIP !== 'localhost') break;
+  }
+  
+  console.log('Config API called - Returning host:', host, 'Protocol:', protocol, 'Local IP:', localIP);
+  
+  // Get encryption key for the user
+  const encryptionKey = userDb.getEncryptionKey(req.user.id);
   
   res.json({
     serverPort: PORT,
-    wsUrl: `${protocol}://${host}`
+    wsUrl: `${protocol}://${host}`,
+    serverIP: localIP,
+    serverProtocol: req.protocol === 'https' || req.get('x-forwarded-proto') === 'https' ? 'https' : 'http',
+    encryptionKey
   });
 });
 
@@ -426,7 +516,7 @@ app.get('/api/projects/:projectName/files', authenticateToken, async (req, res) 
 });
 
 // WebSocket connection handler that routes based on URL path
-wss.on('connection', (ws, request) => {
+wss.on('connection', async (ws, request) => {
   const url = request.url;
   console.log('🔗 Client connected to:', url);
   
@@ -434,10 +524,24 @@ wss.on('connection', (ws, request) => {
   const urlObj = new URL(url, 'http://localhost');
   const pathname = urlObj.pathname;
   
+  // Perform async authentication using stored token
+  const token = request.wsToken;
+  const user = await authenticateWebSocket(token);
+  
+  if (!user) {
+    console.log('❌ WebSocket authentication failed');
+    ws.close(1008, 'Authentication failed');
+    return;
+  }
+  
+  console.log('✅ WebSocket authenticated:', user.username, 'via', user.authType);
+  
   if (pathname === '/shell') {
     handleShellConnection(ws);
   } else if (pathname === '/ws') {
-    handleChatConnection(ws);
+    handleChatConnection(ws, user);
+  } else if (pathname === '/machine') {
+    handleMachineConnection(ws, user);
   } else {
     console.log('❌ Unknown WebSocket path:', pathname);
     ws.close();
@@ -445,11 +549,16 @@ wss.on('connection', (ws, request) => {
 });
 
 // Handle chat WebSocket connections
-function handleChatConnection(ws) {
-  console.log('💬 Chat WebSocket connected');
+function handleChatConnection(ws, user) {
+  console.log('💬 Chat WebSocket connected for user:', user?.username || 'unknown');
   
   // Add to connected clients for project updates
   connectedClients.add(ws);
+  
+  // Register UI client with machine manager
+  if (user) {
+    machineManager.registerUIClient(ws, user.id);
+  }
   
   ws.on('message', async (message) => {
     try {
@@ -459,7 +568,27 @@ function handleChatConnection(ws) {
         console.log('💬 User message:', data.command || '[Continue/Resume]');
         console.log('📁 Project:', data.options?.projectPath || 'Unknown');
         console.log('🔄 Session:', data.options?.sessionId ? 'Resume' : 'New');
-        await spawnClaude(data.command, data.options, ws);
+        console.log('🖥️  Machine:', data.options?.machine_id || 'local');
+        
+        // If machine_id is specified and not 'local', route to machine
+        if (data.options?.machine_id && data.options.machine_id !== 'local') {
+          const routed = machineManager.routeToMachine(data.options.machine_id, {
+            type: ServerMessageTypes.REQUEST_CLAUDE_EXECUTE,
+            command: data.command,
+            options: data.options,
+            request_id: crypto.randomUUID()
+          });
+          
+          if (!routed) {
+            ws.send(JSON.stringify({
+              type: 'error',
+              error: 'Machine is offline or unavailable'
+            }));
+          }
+        } else {
+          // Local execution
+          await spawnClaude(data.command, data.options, ws);
+        }
       } else if (data.type === 'abort-session') {
         console.log('🛑 Abort session request:', data.sessionId);
         const success = abortClaudeSession(data.sessionId);
@@ -468,6 +597,12 @@ function handleChatConnection(ws) {
           sessionId: data.sessionId,
           success
         }));
+      } else if (data.type === 'machine-remove') {
+        // Handle machine removal
+        if (user && data.machine_id) {
+          await machineDb.removeMachine(data.machine_id);
+          await machineManager.broadcastMachineList(user.id);
+        }
       }
     } catch (error) {
       console.error('❌ Chat WebSocket error:', error.message);
@@ -482,6 +617,10 @@ function handleChatConnection(ws) {
     console.log('🔌 Chat client disconnected');
     // Remove from connected clients
     connectedClients.delete(ws);
+    // Unregister from machine manager
+    if (user) {
+      machineManager.unregisterUIClient(ws);
+    }
   });
 }
 
@@ -651,6 +790,148 @@ function handleShellConnection(ws) {
   
   ws.on('error', (error) => {
     console.error('❌ Shell WebSocket error:', error);
+  });
+}
+
+// Handle machine client connections
+function handleMachineConnection(ws, user) {
+  console.log('🤖 Machine client connection attempt');
+  let machineId = null;
+  let encryptionKey = null;
+  
+  // Get user's encryption key
+  if (user && user.id) {
+    encryptionKey = userDb.getEncryptionKey(user.id);
+  }
+  
+  // Helper function to send encrypted messages
+  const sendEncrypted = (data) => {
+    ws.send(encryptWebSocketMessage(data, encryptionKey));
+  };
+  
+  ws.on('message', async (message) => {
+    try {
+      // Decrypt incoming message
+      const data = decryptWebSocketMessage(message, encryptionKey);
+      console.log('📨 Machine message received:', data.type);
+      
+      // Check protocol version
+      if (data.protocol_version && !isCompatibleVersion(data.protocol_version)) {
+        sendEncrypted({
+          type: ServerMessageTypes.REGISTER_ERROR,
+          error: `Incompatible protocol version. Server: ${PROTOCOL_VERSION}, Client: ${data.protocol_version}`
+        });
+        ws.close();
+        return;
+      }
+      
+      switch (data.type) {
+        case ClientMessageTypes.MACHINE_REGISTER:
+          // Register the machine
+          const result = await machineManager.registerMachine(ws, {
+            name: data.name || data.ip_address || 'Unknown',
+            ip_address: data.ip_address,
+            capabilities: data.capabilities || [],
+            user_id: user.id,
+            auth_token: data.auth_token
+          });
+          
+          if (result.success) {
+            machineId = result.machine.id;
+            sendEncrypted({
+              type: ServerMessageTypes.REGISTER_ACK,
+              machine: result.machine,
+              protocol_version: PROTOCOL_VERSION
+            });
+          } else {
+            sendEncrypted({
+              type: ServerMessageTypes.REGISTER_ERROR,
+              error: result.error
+            });
+            ws.close();
+          }
+          break;
+          
+        case ClientMessageTypes.MACHINE_HEARTBEAT:
+          if (machineId) {
+            const success = await machineManager.handleHeartbeat(machineId);
+            sendEncrypted({
+              type: ServerMessageTypes.HEARTBEAT_ACK,
+              success
+            });
+          }
+          break;
+          
+        case ClientMessageTypes.PROJECT_LIST:
+          // Send back project list
+          if (machineId) {
+            const projects = await getProjects();
+            sendEncrypted({
+              type: ClientMessageTypes.PROJECT_LIST,
+              request_id: data.request_id,
+              projects
+            });
+          }
+          break;
+          
+        case ClientMessageTypes.SESSION_LIST:
+          // Send back session list
+          if (machineId && data.project_name) {
+            const sessions = await getSessions(data.project_name, data.limit || 10, data.offset || 0);
+            sendEncrypted({
+              type: ClientMessageTypes.SESSION_LIST,
+              request_id: data.request_id,
+              sessions
+            });
+          }
+          break;
+          
+        case ClientMessageTypes.CLAUDE_RESPONSE:
+        case ClientMessageTypes.CLAUDE_ERROR:
+        case ClientMessageTypes.CLAUDE_COMPLETE:
+          // Forward Claude responses to UI clients
+          if (machineId && data.request_id) {
+            // Find the UI client that made this request
+            // For now, broadcast to all UI clients for this user
+            for (const [clientWs, clientUserId] of machineManager.userConnections) {
+              if (clientUserId === user.id && clientWs.readyState === 1) {
+                clientWs.send(JSON.stringify({
+                  ...data,
+                  machine_id: machineId
+                }));
+              }
+            }
+          }
+          break;
+          
+        case ClientMessageTypes.API_RESPONSE:
+          // Handle API response from machine
+          if (machineId) {
+            machineManager.handleResponse(machineId, data);
+          }
+          break;
+          
+        default:
+          console.log('Unknown machine message type:', data.type);
+      }
+    } catch (error) {
+      console.error('❌ Machine WebSocket error:', error.message);
+      sendEncrypted({
+        type: 'error',
+        error: error.message
+      });
+    }
+  });
+  
+  ws.on('close', () => {
+    console.log('🔌 Machine client disconnected');
+    if (machineId) {
+      machineManager.handleMachineDisconnect(machineId);
+    }
+  });
+  
+  ws.on('error', (error) => {
+    console.error('❌ Machine WebSocket error:', error);
   });
 }
 // Audio transcription endpoint
@@ -980,13 +1261,20 @@ async function startServer() {
   try {
     // Initialize authentication database
     await initializeDatabase();
-    console.log('✅ Database initialization skipped (testing)');
+    console.log('✅ Database initialized');
+    
+    // Load API tokens into cache
+    await loadTokensIntoCache();
     
     server.listen(PORT, '0.0.0.0', async () => {
       console.log(`Claude Code UI server running on http://0.0.0.0:${PORT}`);
       
       // Start watching the projects folder for changes
       await setupProjectsWatcher(); // Re-enabled with better-sqlite3
+      
+      // Start machine status monitoring
+      machineManager.startStatusMonitoring();
+      console.log('🤖 Machine manager started');
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

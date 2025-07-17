@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { userDb } from '../database/db.js';
+import { validateApiToken } from '../utils/apiTokens.js';
 
 // Get JWT secret from environment or use default (for development)
 const JWT_SECRET = process.env.JWT_SECRET || 'claude-ui-dev-secret-change-in-production';
@@ -18,7 +19,7 @@ const validateApiKey = (req, res, next) => {
   next();
 };
 
-// JWT authentication middleware
+// Dual authentication middleware - supports both JWT and API tokens
 const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
@@ -28,6 +29,19 @@ const authenticateToken = async (req, res, next) => {
   }
 
   try {
+    // First, try to validate as API token
+    const apiTokenData = await validateApiToken(token);
+    if (apiTokenData) {
+      // API token validation successful
+      req.user = {
+        id: apiTokenData.user_id,
+        username: apiTokenData.username
+      };
+      req.authType = 'api_token';
+      return next();
+    }
+
+    // If API token validation fails, try JWT
     const decoded = jwt.verify(token, JWT_SECRET);
     
     // Verify user still exists and is active
@@ -37,6 +51,7 @@ const authenticateToken = async (req, res, next) => {
     }
     
     req.user = user;
+    req.authType = 'jwt';
     next();
   } catch (error) {
     console.error('Token verification error:', error);
@@ -56,15 +71,29 @@ const generateToken = (user) => {
   );
 };
 
-// WebSocket authentication function
-const authenticateWebSocket = (token) => {
+// WebSocket authentication function - supports both JWT and API tokens
+const authenticateWebSocket = async (token) => {
   if (!token) {
     return null;
   }
   
   try {
+    // First, try to validate as API token
+    const apiTokenData = await validateApiToken(token);
+    if (apiTokenData) {
+      return {
+        userId: apiTokenData.user_id,
+        username: apiTokenData.username,
+        authType: 'api_token'
+      };
+    }
+
+    // If API token validation fails, try JWT
     const decoded = jwt.verify(token, JWT_SECRET);
-    return decoded;
+    return {
+      ...decoded,
+      authType: 'jwt'
+    };
   } catch (error) {
     console.error('WebSocket token verification error:', error);
     return null;

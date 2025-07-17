@@ -3,10 +3,11 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
-import { X, Plus, Settings, Shield, AlertTriangle, Moon, Sun, Server, Edit3, Trash2, Play, Globe, Terminal, Zap } from 'lucide-react';
+import { X, Plus, Settings, Shield, AlertTriangle, Moon, Sun, Server, Edit3, Trash2, Play, Globe, Terminal, Zap, Smartphone } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import { api } from '../utils/api';
 
-function ToolsSettings({ isOpen, onClose }) {
+function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
   const { isDarkMode, toggleDarkMode } = useTheme();
   const [allowedTools, setAllowedTools] = useState([]);
   const [disallowedTools, setDisallowedTools] = useState([]);
@@ -42,6 +43,38 @@ function ToolsSettings({ isOpen, onClose }) {
   const [mcpServerTools, setMcpServerTools] = useState({});
   const [mcpToolsLoading, setMcpToolsLoading] = useState({});
   const [activeTab, setActiveTab] = useState('tools');
+
+  // MCP sync functionality state
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(null);
+  const [showSyncConfirmation, setShowSyncConfirmation] = useState(false);
+
+  // Ensure valid tab for context
+  useEffect(() => {
+    if (!isServerContext && activeTab === 'server') {
+      setActiveTab('tools');
+    }
+  }, [isServerContext, activeTab]);
+
+  // Custom close handler to clear token state
+  const handleClose = () => {
+    setNewTokenResult(null); // Clear token state when closing
+    onClose();
+  };
+
+  // Machine context logic
+  const isServerContext = selectedMachine === 'local';
+  const currentMachine = machines?.find(m => m.id === selectedMachine);
+  const machineName = isServerContext ? 'Server' : (currentMachine?.name || 'Unknown');
+  const isCurrentMachineOnline = isServerContext || currentMachine?.status === 'online';
+
+  // API token state
+  const [apiTokens, setApiTokens] = useState([]);
+  const [showNewTokenModal, setShowNewTokenModal] = useState(false);
+  const [newTokenName, setNewTokenName] = useState('');
+  const [newTokenResult, setNewTokenResult] = useState(null);
+  const [apiTokenLoading, setApiTokenLoading] = useState(false);
+  const [serverInfo, setServerInfo] = useState(null);
 
   // Common tool patterns
   const commonTools = [
@@ -275,26 +308,40 @@ function ToolsSettings({ isOpen, onClose }) {
 
   const loadSettings = async () => {
     try {
+      // Load settings from API (which handles machine routing automatically)
+      const response = await api.settings.get();
       
-      // Load from localStorage
-      const savedSettings = localStorage.getItem('claude-tools-settings');
-      
-      if (savedSettings) {
-        const settings = JSON.parse(savedSettings);
+      if (response.ok) {
+        const settings = await response.json();
         setAllowedTools(settings.allowedTools || []);
         setDisallowedTools(settings.disallowedTools || []);
         setSkipPermissions(settings.skipPermissions || false);
         setProjectSortOrder(settings.projectSortOrder || 'name');
       } else {
-        // Set defaults
-        setAllowedTools([]);
-        setDisallowedTools([]);
-        setSkipPermissions(false);
-        setProjectSortOrder('name');
+        // Fallback to localStorage for backwards compatibility
+        const savedSettings = localStorage.getItem('claude-tools-settings');
+        
+        if (savedSettings) {
+          const settings = JSON.parse(savedSettings);
+          setAllowedTools(settings.allowedTools || []);
+          setDisallowedTools(settings.disallowedTools || []);
+          setSkipPermissions(settings.skipPermissions || false);
+          setProjectSortOrder(settings.projectSortOrder || 'name');
+        } else {
+          // Set defaults
+          setAllowedTools([]);
+          setDisallowedTools([]);
+          setSkipPermissions(false);
+          setProjectSortOrder('name');
+        }
       }
 
       // Load MCP servers from API
       await fetchMcpServers();
+      
+      // Load API tokens and server info
+      await loadApiTokens();
+      await loadServerInfo();
     } catch (error) {
       console.error('Error loading tool settings:', error);
       // Set defaults on error
@@ -305,7 +352,7 @@ function ToolsSettings({ isOpen, onClose }) {
     }
   };
 
-  const saveSettings = () => {
+  const saveSettings = async () => {
     setIsSaving(true);
     setSaveStatus(null);
     
@@ -318,15 +365,23 @@ function ToolsSettings({ isOpen, onClose }) {
         lastUpdated: new Date().toISOString()
       };
       
+      // Save to API (which handles machine routing automatically)
+      const response = await api.settings.save(settings);
       
-      // Save to localStorage
-      localStorage.setItem('claude-tools-settings', JSON.stringify(settings));
-      
-      setSaveStatus('success');
-      
-      setTimeout(() => {
-        onClose();
-      }, 1000);
+      if (response.ok) {
+        setSaveStatus('success');
+        
+        // Also save to localStorage for backwards compatibility
+        localStorage.setItem('claude-tools-settings', JSON.stringify(settings));
+        
+        setTimeout(() => {
+          handleClose();
+        }, 1000);
+      } else {
+        const error = await response.json();
+        console.error('Error saving tool settings:', error);
+        setSaveStatus('error');
+      }
     } catch (error) {
       console.error('Error saving tool settings:', error);
       setSaveStatus('error');
@@ -355,6 +410,49 @@ function ToolsSettings({ isOpen, onClose }) {
 
   const removeDisallowedTool = (tool) => {
     setDisallowedTools(disallowedTools.filter(t => t !== tool));
+  };
+
+  // MCP Settings Synchronization
+  const handleSyncFromServer = async () => {
+    if (!showSyncConfirmation) {
+      setShowSyncConfirmation(true);
+      return;
+    }
+
+    setIsSyncing(true);
+    setSyncStatus(null);
+    setShowSyncConfirmation(false);
+
+    try {
+      const response = await api.settings.syncFromServer();
+      
+      if (response.ok) {
+        const result = await response.json();
+        setSyncStatus({ type: 'success', message: 'Settings successfully copied from server!' });
+        
+        // Reload the page settings to reflect the synced data
+        await loadSettings();
+        
+        // Auto-close status after 3 seconds
+        setTimeout(() => {
+          setSyncStatus(null);
+        }, 3000);
+      } else {
+        const error = await response.json();
+        setSyncStatus({ 
+          type: 'error', 
+          message: error.error || 'Failed to sync settings from server'
+        });
+      }
+    } catch (error) {
+      console.error('Error syncing from server:', error);
+      setSyncStatus({ 
+        type: 'error', 
+        message: 'Network error occurred while syncing settings'
+      });
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   // MCP form handling functions
@@ -500,6 +598,75 @@ function ToolsSettings({ isOpen, onClose }) {
     }
   };
 
+  // API token management functions
+  const loadApiTokens = async () => {
+    try {
+      const response = await api.get('/api/tokens');
+      const tokens = await response.json();
+      setApiTokens(tokens);
+    } catch (error) {
+      console.error('Failed to load API tokens:', error);
+    }
+  };
+
+  const loadServerInfo = async () => {
+    try {
+      const response = await api.config();
+      const data = await response.json();
+      setServerInfo(data);
+    } catch (error) {
+      console.error('Failed to fetch server config:', error);
+    }
+  };
+
+  const createApiToken = async () => {
+    if (!newTokenName.trim()) return;
+    
+    setApiTokenLoading(true);
+    try {
+      const response = await api.post('/api/tokens', {
+        name: newTokenName.trim()
+      });
+      const result = await response.json();
+      setNewTokenResult(result);
+      setNewTokenName('');
+      setShowNewTokenModal(false);
+      await loadApiTokens();
+    } catch (error) {
+      console.error('Failed to create API token:', error);
+    } finally {
+      setApiTokenLoading(false);
+    }
+  };
+
+  const revokeApiToken = async (tokenId) => {
+    if (!confirm('Are you sure you want to revoke this token? Any clients using this token will need to be updated.')) {
+      return;
+    }
+    
+    try {
+      await api.delete(`/api/tokens/${tokenId}`);
+      await loadApiTokens();
+    } catch (error) {
+      console.error('Failed to revoke API token:', error);
+    }
+  };
+
+  const getServerAddress = () => {
+    if (serverInfo?.serverIP && serverInfo.serverIP !== 'localhost') {
+      return `${serverInfo.serverProtocol || 'http'}://${serverInfo.serverIP}:${serverInfo.serverPort || '3020'}`;
+    }
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    const port = '3020';
+    return `${protocol}//${hostname}:${port}`;
+  };
+
+  const handleCopyNewToken = (token) => {
+    navigator.clipboard.writeText(token);
+    setTimeout(() => setNewTokenResult(null), 30000);
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -515,7 +682,7 @@ function ToolsSettings({ isOpen, onClose }) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={onClose}
+            onClick={handleClose}
             className="text-muted-foreground hover:text-foreground touch-manipulation"
           >
             <X className="w-5 h-5" />
@@ -534,7 +701,7 @@ function ToolsSettings({ isOpen, onClose }) {
                     : 'border-transparent text-muted-foreground hover:text-foreground'
                 }`}
               >
-                Tools
+                Tools{!isServerContext && ` [${machineName}]`}
               </button>
               <button
                 onClick={() => setActiveTab('appearance')}
@@ -546,6 +713,18 @@ function ToolsSettings({ isOpen, onClose }) {
               >
                 Appearance
               </button>
+              {isServerContext && (
+                <button
+                  onClick={() => setActiveTab('server')}
+                  className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'server'
+                      ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Server
+                </button>
+              )}
             </div>
           </div>
 
@@ -624,6 +803,80 @@ function ToolsSettings({ isOpen, onClose }) {
             {/* Tools Tab */}
             {activeTab === 'tools' && (
               <div className="space-y-6 md:space-y-8">
+                
+                {/* Copy MCP Settings from Server - Only for clients */}
+                {!isServerContext && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <Server className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      <h3 className="text-lg font-medium text-foreground">
+                        MCP Settings Synchronization
+                      </h3>
+                    </div>
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Copy MCP server configurations from the main server to this client machine.
+                      </p>
+                      <Button
+                        variant={showSyncConfirmation ? "destructive" : "outline"}
+                        className="w-full justify-center"
+                        disabled={!isCurrentMachineOnline || isSyncing}
+                        onClick={handleSyncFromServer}
+                      >
+                        {isSyncing ? (
+                          <>
+                            <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-gray-300 border-t-gray-600" />
+                            Syncing...
+                          </>
+                        ) : showSyncConfirmation ? (
+                          <>
+                            <AlertTriangle className="w-4 h-4 mr-2" />
+                            Confirm: Overwrite Settings?
+                          </>
+                        ) : (
+                          <>
+                            <Server className="w-4 h-4 mr-2" />
+                            Copy MCP Settings from Server
+                          </>
+                        )}
+                      </Button>
+                      
+                      {/* Status feedback */}
+                      {syncStatus && (
+                        <div className={`mt-3 p-3 rounded-lg text-sm ${
+                          syncStatus.type === 'success' 
+                            ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'
+                            : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+                        }`}>
+                          {syncStatus.message}
+                        </div>
+                      )}
+                      
+                      {/* Confirmation help text */}
+                      {showSyncConfirmation && (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-sm text-orange-700 dark:text-orange-300">
+                            This will overwrite your current MCP settings with the server's configuration.
+                          </p>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs"
+                            onClick={() => setShowSyncConfirmation(false)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      )}
+                      
+                      {!isCurrentMachineOnline && (
+                        <p className="text-sm text-red-600 dark:text-red-400 mt-2">
+                          Client machine is offline. Cannot sync settings.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
             
             {/* Skip Permissions */}
             <div className="space-y-4">
@@ -1234,6 +1487,162 @@ function ToolsSettings({ isOpen, onClose }) {
             )}
               </div>
             )}
+
+            {/* Server Tab */}
+            {activeTab === 'server' && (
+              <div className="space-y-6 md:space-y-8">
+                {/* New Token Creation Result */}
+                {newTokenResult && (
+                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                    <h4 className="font-medium text-green-900 dark:text-green-300 mb-2">
+                      New API Token Created
+                    </h4>
+                    <p className="text-sm text-green-800 dark:text-green-400 mb-3">
+                      Please copy this token now. You won't be able to see it again.
+                    </p>
+                    <div className="relative group">
+                      <div className="bg-green-100 dark:bg-green-900/50 rounded-lg p-3 mb-2 overflow-x-auto">
+                        <code className="text-sm text-green-800 dark:text-green-200 whitespace-nowrap">
+                          {newTokenResult.rawToken}
+                        </code>
+                      </div>
+                      <Button
+                        onClick={() => handleCopyNewToken(newTokenResult.rawToken)}
+                        className="absolute top-2 right-2 p-1.5 bg-green-200 dark:bg-green-800 hover:bg-green-300 dark:hover:bg-green-700 rounded transition-colors"
+                        size="sm"
+                        variant="ghost"
+                      >
+                        <X className="w-4 h-4 text-green-700 dark:text-green-300" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* API Tokens Section - Show if no tokens OR if tokens exist */}
+                {apiTokens.length === 0 ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <Smartphone className="w-5 h-5 text-blue-500" />
+                      <h3 className="text-lg font-medium text-foreground">
+                        API Tokens
+                      </h3>
+                    </div>
+                    
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-4">
+                      <div className="flex items-start">
+                        <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mr-2 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-1">
+                            Important
+                          </p>
+                          <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                            API tokens are persistent and survive server restarts. If you revoke a token, all clients using that token will need to be updated with a new token.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-center py-8">
+                      <p className="text-sm text-muted-foreground mb-4">
+                        No API tokens created yet. Create one to connect remote clients.
+                      </p>
+                      <Button
+                        onClick={() => setShowNewTokenModal(true)}
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create New Token
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Setting up remote machine section */}
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <Terminal className="w-5 h-5 text-blue-500" />
+                        <h3 className="text-lg font-medium text-foreground">
+                          Setting up a remote machine
+                        </h3>
+                      </div>
+                      
+                      <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
+                        <li>Install the Claude Code UI client on the remote machine</li>
+                        <li>Create a <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">.env</code> file in the client directory</li>
+                        <li>Add the server address and authentication token:
+                          <div className="relative group mt-2">
+                            <div className="bg-gray-100 dark:bg-gray-900 rounded-lg p-3 overflow-x-auto">
+                              <pre className="font-mono text-xs text-gray-800 dark:text-gray-200">{`CLAUDE_CODE_UI_SERVER_ADDRESS=${getServerAddress()}
+CLAUDE_CODE_UI_CLIENT_NAME="${newTokenResult ? newTokenResult.name : 'Remote Machine Name'}"
+CLAUDE_CODE_UI_API_TOKEN=${newTokenResult ? newTokenResult.rawToken : 'put-api-token-here'}
+CLAUDE_CODE_UI_ENCRYPTION_KEY=${serverInfo?.encryptionKey || 'encryption-key-will-appear-here'}`}</pre>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => {
+                                const envConfig = `CLAUDE_CODE_UI_SERVER_ADDRESS=${getServerAddress()}
+CLAUDE_CODE_UI_CLIENT_NAME="${newTokenResult ? newTokenResult.name : 'Remote Machine Name'}"
+CLAUDE_CODE_UI_API_TOKEN=${newTokenResult ? newTokenResult.rawToken : 'put-api-token-here'}
+CLAUDE_CODE_UI_ENCRYPTION_KEY=${serverInfo?.encryptionKey || 'encryption-key-will-appear-here'}`;
+                                navigator.clipboard.writeText(envConfig);
+                              }}
+                            >
+                              <Terminal className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </li>
+                        <li>Run <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">npm start</code> in the client directory</li>
+                      </ol>
+                    </div>
+
+                    {/* Manage existing tokens */}
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium text-foreground">
+                          Manage API Tokens
+                        </h4>
+                        <Button
+                          onClick={() => setShowNewTokenModal(true)}
+                          className="bg-blue-600 hover:bg-blue-700 text-white"
+                          size="sm"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Create New Token
+                        </Button>
+                      </div>
+
+                      <div className="space-y-2">
+                        {apiTokens.map((token) => (
+                          <div key={token.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                            <div>
+                              <p className="font-medium text-foreground">{token.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                Created: {new Date(token.created_at).toLocaleDateString()}
+                                {token.last_used_at && (
+                                  <span className="ml-2">
+                                    Last used: {new Date(token.last_used_at).toLocaleDateString()}
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                            <Button
+                              onClick={() => revokeApiToken(token.id)}
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -1259,7 +1668,7 @@ function ToolsSettings({ isOpen, onClose }) {
           <div className="flex items-center gap-3 order-1 sm:order-2">
             <Button 
               variant="outline" 
-              onClick={onClose} 
+              onClick={handleClose} 
               disabled={isSaving}
               className="flex-1 sm:flex-none h-10 touch-manipulation"
             >
@@ -1282,6 +1691,58 @@ function ToolsSettings({ isOpen, onClose }) {
           </div>
         </div>
       </div>
+      
+      {/* New Token Modal */}
+      {showNewTokenModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/50">
+          <div className="relative bg-background border border-border rounded-lg shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-border">
+              <h3 className="text-lg font-semibold text-foreground">
+                Create New API Token
+              </h3>
+              <Button
+                onClick={() => setShowNewTokenModal(false)}
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            
+            <div className="p-6">
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-foreground mb-2">
+                  Token Name
+                </label>
+                <Input
+                  value={newTokenName}
+                  onChange={(e) => setNewTokenName(e.target.value)}
+                  placeholder="e.g., Remote Desktop, Laptop, etc."
+                  className="w-full"
+                  onKeyPress={(e) => e.key === 'Enter' && createApiToken()}
+                />
+              </div>
+              
+              <div className="flex justify-end space-x-3">
+                <Button
+                  onClick={() => setShowNewTokenModal(false)}
+                  variant="outline"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={createApiToken}
+                  disabled={!newTokenName.trim() || apiTokenLoading}
+                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400"
+                >
+                  {apiTokenLoading ? 'Creating...' : 'Create Token'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

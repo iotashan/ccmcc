@@ -7,6 +7,7 @@ import { Input } from './ui/input';
 import { FolderOpen, Folder, Plus, MessageSquare, Clock, ChevronDown, ChevronRight, Edit3, Check, X, Trash2, Settings, FolderPlus, RefreshCw, Sparkles, Edit2, Star, Search } from 'lucide-react';
 import { cn } from '../lib/utils';
 import ClaudeLogo from './ClaudeLogo';
+import MachineSelector from './MachineSelector';
 import { api } from '../utils/api';
 
 // Move formatTimeAgo outside component to avoid recreation on every render
@@ -50,7 +51,11 @@ function Sidebar({
   updateAvailable,
   latestVersion,
   currentVersion,
-  onShowVersionModal
+  onShowVersionModal,
+  machines,
+  selectedMachine,
+  onMachineSelect,
+  onMachineRemove
 }) {
   const [expandedProjects, setExpandedProjects] = useState(new Set());
   const [editingProject, setEditingProject] = useState(null);
@@ -495,6 +500,19 @@ function Sidebar({
           </div>
         </div>
       </div>
+      
+      {/* Machine Selector */}
+      {machines && (
+        <div className="p-3 border-b border-border">
+          <MachineSelector
+            machines={machines}
+            selectedMachine={selectedMachine}
+            onMachineSelect={onMachineSelect}
+            onMachineRemove={onMachineRemove}
+            className="w-full"
+          />
+        </div>
+      )}
       
       {/* New Project Form */}
       {showNewProject && (
@@ -1276,7 +1294,7 @@ function Sidebar({
       {/* Settings Section */}
       <div className="md:p-2 md:border-t md:border-border flex-shrink-0">
         {/* Mobile Settings */}
-        <div className="md:hidden p-4 pb-20 border-t border-border/50">
+        <div className="md:hidden p-4 pb-20 border-t border-border/50 space-y-3">
           <button
             className="w-full h-14 bg-muted/50 hover:bg-muted/70 rounded-2xl flex items-center justify-start gap-4 px-4 active:scale-[0.98] transition-all duration-150"
             onClick={onShowSettings}
@@ -1286,17 +1304,20 @@ function Sidebar({
             </div>
             <span className="text-lg font-medium text-foreground">Settings</span>
           </button>
+          
         </div>
         
         {/* Desktop Settings */}
-        <Button
-          variant="ghost"
-          className="hidden md:flex w-full justify-start gap-2 p-2 h-auto font-normal text-muted-foreground hover:text-foreground hover:bg-accent transition-colors duration-200"
-          onClick={onShowSettings}
-        >
-          <Settings className="w-3 h-3" />
-          <span className="text-xs">Tools Settings</span>
-        </Button>
+        <div className="hidden md:flex flex-col gap-1">
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-2 p-2 h-auto font-normal text-muted-foreground hover:text-foreground hover:bg-accent transition-colors duration-200"
+            onClick={onShowSettings}
+          >
+            <Settings className="w-3 h-3" />
+            <span className="text-xs">Settings</span>
+          </Button>
+        </div>
       </div>
     </div>
   );

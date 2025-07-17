@@ -43,8 +43,12 @@ router.post('/register', async (req, res) => {
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(password, saltRounds);
     
+    // Generate encryption key (256-bit key in base64)
+    const crypto = await import('crypto');
+    const encryptionKey = crypto.randomBytes(32).toString('base64');
+    
     // Create user
-    const user = userDb.createUser(username, passwordHash);
+    const user = userDb.createUser(username, passwordHash, encryptionKey);
     
     // Generate token
     const token = generateToken(user);

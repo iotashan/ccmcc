@@ -25,8 +25,10 @@ import MainContent from './components/MainContent';
 import MobileNav from './components/MobileNav';
 import ToolsSettings from './components/ToolsSettings';
 import QuickSettingsPanel from './components/QuickSettingsPanel';
+import MachineSelector from './components/MachineSelector';
 
 import { useWebSocket } from './utils/websocket';
+import { useMachines } from './hooks/useMachines';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -71,6 +73,15 @@ function AppContent() {
   const [activeSessions, setActiveSessions] = useState(new Set()); // Track sessions with active conversations
   
   const { ws, sendMessage, messages } = useWebSocket();
+  
+  // Machine management
+  const { 
+    machines, 
+    selectedMachine, 
+    selectMachine, 
+    removeMachine, 
+    isSelectedMachineOnline 
+  } = useMachines(messages);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -514,6 +525,10 @@ function AppContent() {
               latestVersion={latestVersion}
               currentVersion={currentVersion}
               onShowVersionModal={() => setShowVersionModal(true)}
+              machines={machines}
+              selectedMachine={selectedMachine}
+              onMachineSelect={selectMachine}
+              onMachineRemove={removeMachine}
             />
           </div>
         </div>
@@ -559,6 +574,10 @@ function AppContent() {
               latestVersion={latestVersion}
               currentVersion={currentVersion}
               onShowVersionModal={() => setShowVersionModal(true)}
+              machines={machines}
+              selectedMachine={selectedMachine}
+              onMachineSelect={selectMachine}
+              onMachineRemove={removeMachine}
             />
           </div>
         </div>
@@ -586,6 +605,7 @@ function AppContent() {
           autoExpandTools={autoExpandTools}
           showRawParameters={showRawParameters}
           autoScrollToBottom={autoScrollToBottom}
+          selectedMachine={selectedMachine}
         />
       </div>
 
@@ -625,6 +645,8 @@ function AppContent() {
       <ToolsSettings
         isOpen={showToolsSettings}
         onClose={() => setShowToolsSettings(false)}
+        selectedMachine={selectedMachine}
+        machines={machines}
       />
 
       {/* Version Upgrade Modal */}
