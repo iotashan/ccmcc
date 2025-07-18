@@ -24,6 +24,7 @@ const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
+
   if (!token) {
     return res.status(401).json({ error: 'Access denied. No token provided.' });
   }
@@ -43,15 +44,18 @@ const authenticateToken = async (req, res, next) => {
 
     // If API token validation fails, try JWT
     const decoded = jwt.verify(token, JWT_SECRET);
+    console.log('DEBUG: JWT verification successful, decoded:', decoded);
     
     // Verify user still exists and is active
     const user = userDb.getUserById(decoded.userId);
+    console.log('DEBUG: User lookup result:', user ? 'Found' : 'Not found');
     if (!user) {
       return res.status(401).json({ error: 'Invalid token. User not found.' });
     }
     
     req.user = user;
     req.authType = 'jwt';
+    console.log('DEBUG: HTTP JWT authentication successful for user:', user.username);
     next();
   } catch (error) {
     console.error('Token verification error:', error);

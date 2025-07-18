@@ -73,11 +73,20 @@ export function useWebSocket() {
         }
       };
 
-      websocket.onclose = () => {
+      websocket.onclose = (event) => {
         setIsConnected(false);
         setWs(null);
         
-        // Attempt to reconnect after 3 seconds
+        // Check if close was due to authentication failure (code 1008 or similar)
+        if (event.code === 1008 || event.code === 1011 || event.reason?.includes('auth')) {
+          console.warn('WebSocket authentication failed, clearing session');
+          localStorage.removeItem('auth-token');
+          // Redirect to login page
+          window.location.href = '/';
+          return;
+        }
+        
+        // Attempt to reconnect after 3 seconds for non-auth failures
         reconnectTimeoutRef.current = setTimeout(() => {
           connect();
         }, 3000);

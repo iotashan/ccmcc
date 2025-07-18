@@ -34,7 +34,27 @@ import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import { useVersionCheck } from './hooks/useVersionCheck';
 import { api } from './utils/api';
+import { useAuth } from './contexts/AuthContext';
 
+// Logout component that handles logout and redirects
+function LogoutRoute() {
+  const { logout } = useAuth();
+  
+  React.useEffect(() => {
+    logout();
+    // Force page reload to clear all state and redirect to login
+    window.location.href = '/';
+  }, [logout]);
+  
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="text-center">
+        <h2 className="text-xl font-semibold text-foreground mb-2">Logging out...</h2>
+        <p className="text-muted-foreground">Please wait while we sign you out.</p>
+      </div>
+    </div>
+  );
+}
 
 // Main App component with routing
 function AppContent() {
@@ -660,14 +680,13 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <ProtectedRoute>
-          <Router>
-            <Routes>
-              <Route path="/" element={<AppContent />} />
-              <Route path="/session/:sessionId" element={<AppContent />} />
-            </Routes>
-          </Router>
-        </ProtectedRoute>
+        <Router>
+          <Routes>
+            <Route path="/logout" element={<LogoutRoute />} />
+            <Route path="/" element={<ProtectedRoute><AppContent /></ProtectedRoute>} />
+            <Route path="/session/:sessionId" element={<ProtectedRoute><AppContent /></ProtectedRoute>} />
+          </Routes>
+        </Router>
       </AuthProvider>
     </ThemeProvider>
   );

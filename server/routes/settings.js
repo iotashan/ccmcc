@@ -1,6 +1,6 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
-import { userDb } from '../database/db.js';
+import { userDb, db } from '../database/db.js';
 
 const router = express.Router();
 
@@ -13,7 +13,7 @@ router.get('/', authenticateToken, async (req, res) => {
     console.log(`[Settings] Getting settings for machine: ${machineId}, user: ${userId}`);
     
     // Get settings from database
-    const stmt = userDb.prepare(`
+    const stmt = db.prepare(`
       SELECT settings_data, updated_at 
       FROM machine_settings 
       WHERE machine_id = ? AND user_id = ?
@@ -57,7 +57,7 @@ router.post('/', authenticateToken, async (req, res) => {
     settings.lastUpdated = new Date().toISOString();
     
     // Insert or update settings
-    const stmt = userDb.prepare(`
+    const stmt = db.prepare(`
       INSERT OR REPLACE INTO machine_settings (machine_id, user_id, settings_data, updated_at)
       VALUES (?, ?, ?, CURRENT_TIMESTAMP)
     `);
@@ -86,7 +86,7 @@ router.post('/sync-from-server', authenticateToken, async (req, res) => {
     }
     
     // Get server settings
-    const serverStmt = userDb.prepare(`
+    const serverStmt = db.prepare(`
       SELECT settings_data 
       FROM machine_settings 
       WHERE machine_id = 'local' AND user_id = ?
@@ -111,7 +111,7 @@ router.post('/sync-from-server', authenticateToken, async (req, res) => {
     };
     
     // Save to target machine
-    const updateStmt = userDb.prepare(`
+    const updateStmt = db.prepare(`
       INSERT OR REPLACE INTO machine_settings (machine_id, user_id, settings_data, updated_at)
       VALUES (?, ?, ?, CURRENT_TIMESTAMP)
     `);

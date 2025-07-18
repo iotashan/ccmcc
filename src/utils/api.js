@@ -5,33 +5,8 @@ let encryptionKeyCache = null;
 
 // Get encryption key from cache or config
 const getEncryptionKey = async () => {
-  if (encryptionKeyCache) {
-    return encryptionKeyCache;
-  }
-  
-  // Fetch config to get encryption key
-  const token = localStorage.getItem('auth-token');
-  if (!token) {
-    return null;
-  }
-  
-  try {
-    const response = await fetch('/api/config', {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      }
-    });
-    
-    if (response.ok) {
-      const config = await response.json();
-      encryptionKeyCache = config.encryptionKey;
-      return config.encryptionKey;
-    }
-  } catch (error) {
-    console.error('Failed to fetch encryption key:', error);
-  }
-  
+  // Web GUI does not use encryption - only API token machine clients do
+  // Return null to disable encryption for web GUI
   return null;
 };
 
@@ -58,15 +33,15 @@ export const authenticatedFetch = async (url, options = {}) => {
     defaultHeaders['X-Machine-ID'] = selectedMachine;
   }
   
-  // Check if encryption is supported
-  if (isEncryptionSupported()) {
+  // Get encryption key first to determine if encryption should be used
+  const encryptionKey = await getEncryptionKey();
+  
+  // Check if encryption is supported AND we have an encryption key
+  if (isEncryptionSupported() && encryptionKey) {
     defaultHeaders['X-Encryption-Support'] = 'true';
     
-    // Get encryption key
-    const encryptionKey = await getEncryptionKey();
-    
     // Encrypt request body if present
-    if (options.body && encryptionKey && options.headers?.['Content-Type'] !== 'multipart/form-data') {
+    if (options.body && options.headers?.['Content-Type'] !== 'multipart/form-data') {
       try {
         const data = JSON.parse(options.body);
         const encryptedBody = await encryptRequestBody(data, encryptionKey);
@@ -86,8 +61,18 @@ export const authenticatedFetch = async (url, options = {}) => {
       },
     });
     
-    // Check if response is encrypted
-    if (response.headers.get('X-Encrypted') === 'true' && encryptionKey) {
+    // Check for authentication errors and clear session
+    if (response.status === 401 || response.status === 403) {
+      console.warn('Authentication failed, clearing session');
+      localStorage.removeItem('auth-token');
+      clearEncryptionKey();
+      // Redirect to login page
+      window.location.href = '/';
+      return response;
+    }
+    
+    // Check if response is encrypted and decrypt if needed
+    if (response.headers.get('X-Encrypted') === 'true') {
       // Clone response to read body
       const clonedResponse = response.clone();
       
@@ -112,6 +97,7 @@ export const authenticatedFetch = async (url, options = {}) => {
         return decryptedResponse;
       } catch (error) {
         console.error('Response decryption failed:', error);
+        // Fall back to original response if decryption fails
         return response;
       }
     }
@@ -120,13 +106,24 @@ export const authenticatedFetch = async (url, options = {}) => {
   }
   
   // Fall back to unencrypted fetch
-  return fetch(url, {
+  const response = await fetch(url, {
     ...options,
     headers: {
       ...defaultHeaders,
       ...options.headers,
     },
   });
+  
+  // Check for authentication errors and clear session
+  if (response.status === 401 || response.status === 403) {
+    console.warn('Authentication failed, clearing session');
+    localStorage.removeItem('auth-token');
+    clearEncryptionKey();
+    // Redirect to login page
+    window.location.href = '/';
+  }
+  
+  return response;
 };
 
 // API endpoints

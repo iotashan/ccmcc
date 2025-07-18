@@ -24,7 +24,7 @@ export const useMachines = (websocketMessages = []) => {
       const response = await fetch(`/api/machines/${machineId}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('auth-token')}`
         }
       });
 
@@ -50,7 +50,7 @@ export const useMachines = (websocketMessages = []) => {
     try {
       const response = await fetch('/api/machines', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('auth-token')}`
         }
       });
 

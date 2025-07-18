@@ -146,7 +146,7 @@ const apiTokensDb = {
       const stmt = db.prepare(`
         SELECT id, name, created_at, last_used_at, expires_at, is_active
         FROM api_tokens 
-        WHERE user_id = ? 
+        WHERE user_id = ? AND is_active = 1
         ORDER BY created_at DESC
       `);
       return stmt.all(userId);

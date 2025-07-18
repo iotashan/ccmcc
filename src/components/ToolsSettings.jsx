@@ -3,7 +3,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
-import { X, Plus, Settings, Shield, AlertTriangle, Moon, Sun, Server, Edit3, Trash2, Play, Globe, Terminal, Zap, Smartphone } from 'lucide-react';
+import { X, Plus, Settings, Shield, AlertTriangle, Moon, Sun, Server, Edit3, Trash2, Play, Globe, Terminal, Zap, Smartphone, Lock, Copy } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { api } from '../utils/api';
 
@@ -49,6 +49,9 @@ function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
   const [syncStatus, setSyncStatus] = useState(null);
   const [showSyncConfirmation, setShowSyncConfirmation] = useState(false);
 
+  // Machine context logic
+  const isServerContext = selectedMachine === 'local';
+
   // Ensure valid tab for context
   useEffect(() => {
     if (!isServerContext && activeTab === 'server') {
@@ -61,9 +64,6 @@ function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
     setNewTokenResult(null); // Clear token state when closing
     onClose();
   };
-
-  // Machine context logic
-  const isServerContext = selectedMachine === 'local';
   const currentMachine = machines?.find(m => m.id === selectedMachine);
   const machineName = isServerContext ? 'Server' : (currentMachine?.name || 'Unknown');
   const isCurrentMachineOnline = isServerContext || currentMachine?.status === 'online';
@@ -75,6 +75,7 @@ function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
   const [newTokenResult, setNewTokenResult] = useState(null);
   const [apiTokenLoading, setApiTokenLoading] = useState(false);
   const [serverInfo, setServerInfo] = useState(null);
+  const [copyFeedback, setCopyFeedback] = useState(false);
 
   // Common tool patterns
   const commonTools = [
@@ -302,6 +303,10 @@ function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
 
   useEffect(() => {
     if (isOpen) {
+      // Reset state when dialog opens
+      setSaveStatus(null);
+      setSyncStatus(null);
+      setNewTokenResult(null);
       loadSettings();
     }
   }, [isOpen]);
@@ -1522,7 +1527,7 @@ function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
                 {apiTokens.length === 0 ? (
                   <div className="space-y-4">
                     <div className="flex items-center gap-3">
-                      <Smartphone className="w-5 h-5 text-blue-500" />
+                      <Lock className="w-5 h-5 text-blue-500" />
                       <h3 className="text-lg font-medium text-foreground">
                         API Tokens
                       </h3>
@@ -1580,16 +1585,24 @@ CLAUDE_CODE_UI_ENCRYPTION_KEY=${serverInfo?.encryptionKey || 'encryption-key-wil
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className={`absolute top-2 right-2 transition-all ${
+                                copyFeedback 
+                                  ? 'opacity-100 text-green-600 dark:text-green-400' 
+                                  : 'opacity-0 group-hover:opacity-100'
+                              }`}
                               onClick={() => {
                                 const envConfig = `CLAUDE_CODE_UI_SERVER_ADDRESS=${getServerAddress()}
 CLAUDE_CODE_UI_CLIENT_NAME="${newTokenResult ? newTokenResult.name : 'Remote Machine Name'}"
 CLAUDE_CODE_UI_API_TOKEN=${newTokenResult ? newTokenResult.rawToken : 'put-api-token-here'}
 CLAUDE_CODE_UI_ENCRYPTION_KEY=${serverInfo?.encryptionKey || 'encryption-key-will-appear-here'}`;
-                                navigator.clipboard.writeText(envConfig);
+                                navigator.clipboard.writeText(envConfig).then(() => {
+                                  setCopyFeedback(true);
+                                  setTimeout(() => setCopyFeedback(false), 2000);
+                                });
                               }}
+                              title={copyFeedback ? "Copied!" : "Copy to clipboard"}
                             >
-                              <Terminal className="w-4 h-4" />
+                              <Copy className="w-4 h-4" />
                             </Button>
                           </div>
                         </li>
