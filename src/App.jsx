@@ -119,6 +119,20 @@ function AppContent() {
     fetchProjects();
   }, []);
 
+  // Refresh projects when selected machine changes
+  useEffect(() => {
+    if (selectedMachine !== undefined) {
+      console.log('Machine changed to:', selectedMachine);
+      // Set loading state and clear projects immediately
+      setIsLoadingProjects(true);
+      setProjects([]);
+      setSelectedProject(null);
+      setSelectedSession(null);
+      // Then fetch new projects
+      fetchProjects();
+    }
+  }, [selectedMachine]);
+
   // Helper function to determine if an update is purely additive (new sessions/projects)
   // vs modifying existing selected items that would interfere with active conversations
   const isUpdateAdditive = (currentProjects, updatedProjects, selectedProject, selectedSession) => {
@@ -219,15 +233,21 @@ function AppContent() {
       const response = await api.projects();
       const data = await response.json();
       
+      // Debug logging to see what's returned from remote machines
+      console.log('Projects API response:', data);
+      
+      // Ensure data is an array
+      const projectsData = Array.isArray(data) ? data : [];
+      
       // Optimize to preserve object references when data hasn't changed
       setProjects(prevProjects => {
         // If no previous projects, just set the new data
         if (prevProjects.length === 0) {
-          return data;
+          return projectsData;
         }
         
         // Check if the projects data has actually changed
-        const hasChanges = data.some((newProject, index) => {
+        const hasChanges = projectsData.some((newProject, index) => {
           const prevProject = prevProjects[index];
           if (!prevProject) return true;
           
@@ -239,10 +259,10 @@ function AppContent() {
             JSON.stringify(newProject.sessionMeta) !== JSON.stringify(prevProject.sessionMeta) ||
             JSON.stringify(newProject.sessions) !== JSON.stringify(prevProject.sessions)
           );
-        }) || data.length !== prevProjects.length;
+        }) || projectsData.length !== prevProjects.length;
         
         // Only update if there are actual changes
-        return hasChanges ? data : prevProjects;
+        return hasChanges ? projectsData : prevProjects;
       });
       
       // Don't auto-select any project - user should choose manually

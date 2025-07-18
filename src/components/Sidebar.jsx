@@ -37,26 +37,33 @@ const formatTimeAgo = (dateString, currentTime) => {
 };
 
 function Sidebar({ 
-  projects, 
+  projects = [], 
   selectedProject, 
   selectedSession, 
-  onProjectSelect, 
-  onSessionSelect, 
-  onNewSession,
-  onSessionDelete,
-  onProjectDelete,
-  isLoading,
-  onRefresh,
-  onShowSettings,
+  onProjectSelect = () => {}, 
+  onSessionSelect = () => {}, 
+  onNewSession = () => {},
+  onSessionDelete = () => {},
+  onProjectDelete = () => {},
+  isLoading = false,
+  onRefresh = () => {},
+  onShowSettings = () => {},
   updateAvailable,
   latestVersion,
   currentVersion,
-  onShowVersionModal,
+  onShowVersionModal = () => {},
   machines,
   selectedMachine,
-  onMachineSelect,
-  onMachineRemove
+  onMachineSelect = () => {},
+  onMachineRemove = () => {}
 }) {
+  try {
+    // Debug logging
+    console.log('Sidebar render:', { projects, machines, selectedMachine });
+    
+    // Ensure machines is always an array
+    const machinesList = Array.isArray(machines) ? machines : [];
+  
   const [expandedProjects, setExpandedProjects] = useState(new Set());
   const [editingProject, setEditingProject] = useState(null);
   const [showNewProject, setShowNewProject] = useState(false);
@@ -67,7 +74,16 @@ function Sidebar({
   const [additionalSessions, setAdditionalSessions] = useState({});
   const [initialSessionsLoaded, setInitialSessionsLoaded] = useState(new Set());
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [projectSortOrder, setProjectSortOrder] = useState('name');
+  const [projectSortOrder, setProjectSortOrder] = useState(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return localStorage.getItem('projectSortOrder') || 'name';
+      }
+      return 'name';
+    } catch (error) {
+      return 'name';
+    }
+  });
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [editingSession, setEditingSession] = useState(null);
   const [editingSessionName, setEditingSessionName] = useState('');
@@ -78,8 +94,11 @@ function Sidebar({
   // Starred projects state - persisted in localStorage
   const [starredProjects, setStarredProjects] = useState(() => {
     try {
-      const saved = localStorage.getItem('starredProjects');
-      return saved ? new Set(JSON.parse(saved)) : new Set();
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = localStorage.getItem('starredProjects');
+        return saved ? new Set(JSON.parse(saved)) : new Set();
+      }
+      return new Set();
     } catch (error) {
       console.error('Error loading starred projects:', error);
       return new Set();
@@ -123,7 +142,7 @@ function Sidebar({
 
   // Mark sessions as loaded when projects come in
   useEffect(() => {
-    if (projects.length > 0 && !isLoading) {
+    if (projects && projects.length > 0 && !isLoading) {
       const newLoaded = new Set();
       projects.forEach(project => {
         if (project.sessions && project.sessions.length >= 0) {
@@ -207,20 +226,25 @@ function Sidebar({
 
   // Helper function to get all sessions for a project (initial + additional)
   const getAllSessions = (project) => {
+    if (!project) return [];
     const initialSessions = project.sessions || [];
     const additional = additionalSessions[project.name] || [];
-    return [...initialSessions, ...additional];
+    // Filter out any null/undefined sessions
+    return [...initialSessions, ...additional].filter(session => session != null);
   };
 
   // Helper function to get the last activity date for a project
   const getProjectLastActivity = (project) => {
+    if (!project) return new Date(0);
+    
     const allSessions = getAllSessions(project);
-    if (allSessions.length === 0) {
+    if (!allSessions || allSessions.length === 0) {
       return new Date(0); // Return epoch date for projects with no sessions
     }
     
     // Find the most recent session activity
     const mostRecentDate = allSessions.reduce((latest, session) => {
+      if (!session || !session.lastActivity) return latest;
       const sessionDate = new Date(session.lastActivity);
       return sessionDate > latest ? sessionDate : latest;
     }, new Date(0));
@@ -229,7 +253,8 @@ function Sidebar({
   };
 
   // Combined sorting: starred projects first, then by selected order
-  const sortedProjects = [...projects].sort((a, b) => {
+  const sortedProjects = [...(projects || [])].sort((a, b) => {
+    if (!a || !a.name || !b || !b.name) return 0;
     const aStarred = isProjectStarred(a.name);
     const bStarred = isProjectStarred(b.name);
     
@@ -406,13 +431,33 @@ function Sidebar({
     }
   };
 
+  const updateSessionSummary = async (projectName, sessionId, newSummary) => {
+    try {
+      const response = await api.updateSessionSummary(projectName, sessionId, newSummary);
+      
+      if (response.ok) {
+        // Refresh projects to get updated summary
+        if (window.refreshProjects) {
+          window.refreshProjects();
+        }
+        setEditingSession(null);
+        setEditingSessionName('');
+      } else {
+        console.error('Failed to update session summary');
+      }
+    } catch (error) {
+      console.error('Error updating session summary:', error);
+    }
+  };
+
   // Filter projects based on search input
-  const filteredProjects = sortedProjects.filter(project => {
+  const filteredProjects = (sortedProjects || []).filter(project => {
+    if (!project || !project.name) return false;
     if (!searchFilter.trim()) return true;
     
     const searchLower = searchFilter.toLowerCase();
-    const displayName = (project.displayName || project.name).toLowerCase();
-    const projectName = project.name.toLowerCase();
+    const displayName = (project.displayName || project.name || '').toLowerCase();
+    const projectName = (project.name || '').toLowerCase();
     
     // Search in both display name and actual project name/path
     return displayName.includes(searchLower) || projectName.includes(searchLower);
@@ -433,86 +478,34 @@ function Sidebar({
               <p className="text-sm text-muted-foreground">AI coding assistant interface</p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 w-9 px-0 hover:bg-accent transition-colors duration-200 group"
-              onClick={async () => {
-                setIsRefreshing(true);
-                try {
-                  await onRefresh();
-                } finally {
-                  setIsRefreshing(false);
-                }
-              }}
-              disabled={isRefreshing}
-              title="Refresh projects and sessions (Ctrl+R)"
-            >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''} group-hover:rotate-180 transition-transform duration-300`} />
-            </Button>
-            <Button
-              variant="default"
-              size="sm"
-              className="h-9 w-9 px-0 bg-primary hover:bg-primary/90 transition-all duration-200 shadow-sm hover:shadow-md"
-              onClick={() => setShowNewProject(true)}
-              title="Create new project (Ctrl+N)"
-            >
-              <FolderPlus className="w-4 h-4" />
-            </Button>
-          </div>
         </div>
         
         {/* Mobile Header */}
         <div className="md:hidden p-3 border-b border-border">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <MessageSquare className="w-4 h-4 text-primary-foreground" />
-              </div>
-              <div>
-                <h1 className="text-lg font-semibold text-foreground">Claude Code UI</h1>
-                <p className="text-sm text-muted-foreground">Projects</p>
-              </div>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+              <MessageSquare className="w-4 h-4 text-primary-foreground" />
             </div>
-            <div className="flex gap-2">
-              <button
-                className="w-8 h-8 rounded-md bg-background border border-border flex items-center justify-center active:scale-95 transition-all duration-150"
-                onClick={async () => {
-                  setIsRefreshing(true);
-                  try {
-                    await onRefresh();
-                  } finally {
-                    setIsRefreshing(false);
-                  }
-                }}
-                disabled={isRefreshing}
-              >
-                <RefreshCw className={`w-4 h-4 text-foreground ${isRefreshing ? 'animate-spin' : ''}`} />
-              </button>
-              <button
-                className="w-8 h-8 rounded-md bg-primary text-primary-foreground flex items-center justify-center active:scale-95 transition-all duration-150"
-                onClick={() => setShowNewProject(true)}
-              >
-                <FolderPlus className="w-4 h-4" />
-              </button>
+            <div>
+              <h1 className="text-lg font-semibold text-foreground">Claude Code UI</h1>
+              <p className="text-sm text-muted-foreground">Projects</p>
             </div>
           </div>
         </div>
       </div>
       
       {/* Machine Selector */}
-      {machines && (
+      {machinesList.length > 0 || selectedMachine ? (
         <div className="p-3 border-b border-border">
           <MachineSelector
-            machines={machines}
+            machines={machinesList}
             selectedMachine={selectedMachine}
             onMachineSelect={onMachineSelect}
             onMachineRemove={onMachineRemove}
             className="w-full"
           />
         </div>
-      )}
+      ) : null}
       
       {/* New Project Form */}
       {showNewProject && (
@@ -615,26 +608,58 @@ function Sidebar({
         </div>
       )}
       
-      {/* Search Filter */}
-      {projects.length > 0 && !isLoading && (
+      {/* Search Filter with Actions */}
+      {!isLoading && (
         <div className="px-3 md:px-4 py-2 border-b border-border">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search projects..."
-              value={searchFilter}
-              onChange={(e) => setSearchFilter(e.target.value)}
-              className="pl-9 h-9 text-sm bg-muted/50 border-0 focus:bg-background focus:ring-1 focus:ring-primary/20"
-            />
-            {searchFilter && (
-              <button
-                onClick={() => setSearchFilter('')}
-                className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 hover:bg-accent rounded"
-              >
-                <X className="w-3 h-3 text-muted-foreground" />
-              </button>
+          <div className="flex items-center gap-2">
+            {projects && projects.length > 0 ? (
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search projects..."
+                  value={searchFilter}
+                  onChange={(e) => setSearchFilter(e.target.value)}
+                  className="pl-9 h-9 text-sm bg-muted/50 border-0 focus:bg-background focus:ring-1 focus:ring-primary/20"
+                />
+                {searchFilter && (
+                  <button
+                    onClick={() => setSearchFilter('')}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 hover:bg-accent rounded"
+                  >
+                    <X className="w-3 h-3 text-muted-foreground" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="flex-1" />
             )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 w-9 px-0 hover:bg-accent transition-colors duration-200 group"
+              onClick={async () => {
+                setIsRefreshing(true);
+                try {
+                  await onRefresh();
+                } finally {
+                  setIsRefreshing(false);
+                }
+              }}
+              disabled={isRefreshing}
+              title="Refresh projects and sessions (Ctrl+R)"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''} group-hover:rotate-180 transition-transform duration-300`} />
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              className="h-9 w-9 px-0 bg-primary hover:bg-primary/90 transition-all duration-200 shadow-sm hover:shadow-md"
+              onClick={() => setShowNewProject(true)}
+              title="Create new project (Ctrl+N)"
+            >
+              <FolderPlus className="w-4 h-4" />
+            </Button>
           </div>
         </div>
       )}
@@ -652,7 +677,7 @@ function Sidebar({
                 Fetching your Claude projects and sessions
               </p>
             </div>
-          ) : projects.length === 0 ? (
+          ) : !projects || projects.length === 0 ? (
             <div className="text-center py-12 md:py-8 px-4">
               <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center mx-auto mb-4 md:mb-3">
                 <Folder className="w-6 h-6 text-muted-foreground" />
@@ -674,6 +699,9 @@ function Sidebar({
             </div>
           ) : (
             filteredProjects.map((project) => {
+              // Skip null/undefined projects
+              if (!project || !project.name) return null;
+              
               const isExpanded = expandedProjects.has(project.name);
               const isSelected = selectedProject?.name === project.name;
               const isStarred = isProjectStarred(project.name);
@@ -886,7 +914,7 @@ function Sidebar({
                                   const hasMore = project.sessionMeta?.hasMore !== false;
                                   return hasMore && sessionCount >= 5 ? `${sessionCount}+` : sessionCount;
                                 })()}
-                                {project.fullPath !== project.displayName && (
+                                {project.fullPath && project.fullPath !== project.displayName && (
                                   <span className="ml-1 opacity-60" title={project.fullPath}>
                                     • {project.fullPath.length > 25 ? '...' + project.fullPath.slice(-22) : project.fullPath}
                                   </span>
@@ -997,8 +1025,11 @@ function Sidebar({
                         </div>
                       ) : (
                         getAllSessions(project).map((session) => {
+                          // Skip null/undefined sessions
+                          if (!session || !session.id) return null;
+                          
                           // Calculate if session is active (within last 10 minutes)
-                          const sessionDate = new Date(session.lastActivity);
+                          const sessionDate = session.lastActivity ? new Date(session.lastActivity) : new Date(0);
                           const diffInMinutes = Math.floor((currentTime - sessionDate) / (1000 * 60));
                           const isActive = diffInMinutes < 10;
                           
@@ -1189,7 +1220,7 @@ function Sidebar({
                             </div>
                           </div>
                           );
-                        })
+                        }).filter(Boolean)
                       )}
 
                       {/* Show More Sessions Button */}
@@ -1321,6 +1352,14 @@ function Sidebar({
       </div>
     </div>
   );
+  } catch (error) {
+    console.error('Sidebar render error:', error);
+    return (
+      <div className="h-full flex flex-col bg-card md:select-none p-4">
+        <div className="text-red-500">Error loading sidebar: {error.message}</div>
+      </div>
+    );
+  }
 }
 
 export default Sidebar;

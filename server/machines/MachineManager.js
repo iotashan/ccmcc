@@ -85,28 +85,13 @@ class MachineManager {
         actualUserId = tokenData.user_id;
       }
       
-      // Check if machine already exists
-      machine = await machineDb.getMachineByName(name, actualUserId);
-      
-      if (machine) {
-        // Update existing machine
-        await machineDb.updateMachine(machine.id, {
-          ip_address,
-          capabilities
-        });
-      } else {
-        // Create new machine
-        const result = await machineDb.createMachine({
-          name,
-          ip_address,
-          capabilities,
-          user_id: actualUserId
-        });
-        machine = await machineDb.getMachine(result.id);
-      }
-
-      // Update status to online
-      await machineDb.updateMachineStatus(machine.id, 'online');
+      // Use upsert to create/update machine and set online status in one operation
+      machine = await machineDb.upsertMachine({
+        name,
+        ip_address,
+        capabilities,
+        user_id: actualUserId
+      });
 
       // Store connection
       this.connections.set(machine.id, {

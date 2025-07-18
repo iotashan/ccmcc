@@ -29,7 +29,7 @@ export class ClaudeHandler {
       const cwd = options?.projectPath || process.cwd();
       
       // Spawn Claude process
-      const claudeProcess = spawn('claude', args, {
+      const claudeProcess = spawn('claude-code', args, {
         cwd,
         env: process.env,
         shell: true

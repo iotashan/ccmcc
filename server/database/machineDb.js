@@ -191,6 +191,76 @@ const machineDb = {
     }
   },
 
+  // Upsert machine - create or update in a single operation
+  upsertMachine: (machineData) => {
+    try {
+      const { name, ip_address, capabilities, user_id } = machineData;
+      
+      // Check if machine exists
+      const existing = db.prepare(
+        'SELECT * FROM machines WHERE name = ? AND user_id = ? AND is_removed = 0'
+      ).get(name, user_id);
+      
+      if (existing) {
+        // Update existing machine and set online in one query
+        const stmt = db.prepare(`
+          UPDATE machines 
+          SET ip_address = ?, 
+              capabilities = ?, 
+              status = 'online', 
+              last_seen = CURRENT_TIMESTAMP 
+          WHERE id = ?
+        `);
+        stmt.run(
+          ip_address || existing.ip_address,
+          JSON.stringify(capabilities || []),
+          existing.id
+        );
+        
+        return {
+          ...existing,
+          ip_address: ip_address || existing.ip_address,
+          capabilities: capabilities || JSON.parse(existing.capabilities || '[]'),
+          status: 'online'
+        };
+      } else {
+        // Create new machine with online status
+        const id = crypto.randomUUID();
+        const authToken = machineDb.generateAuthToken();
+        
+        const stmt = db.prepare(`
+          INSERT INTO machines (
+            id, name, ip_address, status, capabilities, metadata, auth_token, user_id, last_seen
+          ) VALUES (?, ?, ?, 'online', ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `);
+        
+        stmt.run(
+          id,
+          name,
+          ip_address || null,
+          JSON.stringify(capabilities || []),
+          JSON.stringify({}),
+          authToken,
+          user_id
+        );
+        
+        return {
+          id,
+          name,
+          ip_address,
+          status: 'online',
+          capabilities: capabilities || [],
+          metadata: {},
+          auth_token: authToken,
+          user_id,
+          last_seen: new Date()
+        };
+      }
+    } catch (err) {
+      throw err;
+    }
+  },
+
   // Update machines offline if not seen recently
   updateOfflineMachines: (thresholdSeconds = 90) => {
     try {

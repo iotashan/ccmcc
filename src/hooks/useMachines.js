@@ -48,6 +48,7 @@ export const useMachines = (websocketMessages = []) => {
   // Fetch machines from API
   const fetchMachines = useCallback(async () => {
     try {
+      console.log('Fetching machines from API...');
       const response = await fetch('/api/machines', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('auth-token')}`
@@ -59,6 +60,7 @@ export const useMachines = (websocketMessages = []) => {
       }
 
       const data = await response.json();
+      console.log('Machines API response:', data);
       setMachines(data.machines || []);
     } catch (error) {
       console.error('Error fetching machines:', error);
@@ -85,14 +87,23 @@ export const useMachines = (websocketMessages = []) => {
 
   // Initial fetch and periodic refresh
   useEffect(() => {
+    // Fetch immediately on mount
     fetchMachines();
+    
+    // Also fetch after a short delay to catch any machines that connect right after page load
+    const initialTimeout = setTimeout(() => {
+      fetchMachines();
+    }, 1000);
     
     // Refresh machine list every 30 seconds
     const intervalId = setInterval(() => {
       fetchMachines();
     }, 30000);
     
-    return () => clearInterval(intervalId);
+    return () => {
+      clearTimeout(initialTimeout);
+      clearInterval(intervalId);
+    };
   }, [fetchMachines]);
 
   // Check if selected machine is online
