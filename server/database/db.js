@@ -133,7 +133,7 @@ const apiTokensDb = {
   // Update last used timestamp
   updateLastUsed: (tokenHash) => {
     try {
-      const stmt = db.prepare('UPDATE api_tokens SET last_used_at = datetime("now") WHERE token_hash = ?');
+      const stmt = db.prepare('UPDATE api_tokens SET last_used_at = datetime(\'now\') WHERE token_hash = ?');
       stmt.run(tokenHash);
     } catch (err) {
       throw err;
@@ -180,6 +180,22 @@ const apiTokensDb = {
     try {
       const stmt = db.prepare('DELETE FROM api_tokens WHERE expires_at IS NOT NULL AND expires_at < datetime("now")');
       return stmt.run();
+    } catch (err) {
+      throw err;
+    }
+  },
+
+  // Get all active tokens with user information
+  getAllActiveTokens: () => {
+    try {
+      const stmt = db.prepare(`
+        SELECT t.*, u.username 
+        FROM api_tokens t 
+        JOIN users u ON t.user_id = u.id 
+        WHERE t.is_active = 1 
+        AND (t.expires_at IS NULL OR t.expires_at > datetime('now'))
+      `);
+      return stmt.all();
     } catch (err) {
       throw err;
     }

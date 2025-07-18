@@ -1,4 +1,5 @@
 import { ServerMessageTypes } from '../../shared/protocol.js';
+import { machineDb } from '../database/db.js';
 
 // Middleware to handle machine routing for API requests
 export const machineRoutingMiddleware = (machineManager) => {
@@ -10,9 +11,11 @@ export const machineRoutingMiddleware = (machineManager) => {
       return next();
     }
     
-    // Check if machine is connected
-    const machine = machineManager.getMachine(machineId);
-    if (!machine || !machine.is_online) {
+    // Check if machine exists and is connected
+    const connection = machineManager.getMachineConnection(machineId);
+    const machine = await machineDb.getMachine(machineId);
+    
+    if (!machine || !connection) {
       return res.status(503).json({ 
         error: 'Target machine is not available',
         machineId,

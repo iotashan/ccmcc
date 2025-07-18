@@ -19,7 +19,8 @@ export class MachineConnection extends EventEmitter {
   async connect() {
     try {
       const serverUrl = this.config.serverAddress.replace(/^http/, 'ws');
-      const url = `${serverUrl}/machine?token=${encodeURIComponent(this.authToken || '')}`;
+      // Always use the API token from config for authentication
+      const url = `${serverUrl}/machine?token=${encodeURIComponent(this.config.authToken || '')}`;
       
       this.logger.info(`Connecting to ${serverUrl}...`);
       
@@ -47,7 +48,7 @@ export class MachineConnection extends EventEmitter {
       name: this.config.clientName,
       ip_address: this.config.clientName,
       capabilities: this.config.capabilities,
-      auth_token: this.authToken,
+      auth_token: this.config.authToken,  // Use API token from config
       protocol_version: PROTOCOL_VERSION
     });
   }
@@ -108,22 +109,12 @@ export class MachineConnection extends EventEmitter {
 
   handleRegisterAck(message) {
     this.machineId = message.machine.id;
-    this.authToken = message.machine.auth_token;
+    // Don't override the API token with machine auth token
+    // this.authToken = message.machine.auth_token;
     
     this.logger.info(`Registered as machine: ${message.machine.name} (${this.machineId})`);
     
-    // Save auth token for future connections
-    if (message.machine.auth_token && !this.config.authToken) {
-      this.logger.info('Received auth token - saving to .env file...');
-      const saved = saveAuthToken(message.machine.auth_token);
-      if (saved) {
-        this.logger.info('Auth token saved successfully to .env file');
-      } else {
-        this.logger.warn('Failed to save auth token to .env file');
-        this.logger.info('You can manually add to .env:');
-        this.logger.info(`CLAUDE_CODE_UI_AUTH_TOKEN=${message.machine.auth_token}`);
-      }
-    }
+    // Note: We keep using the API token for authentication, not the machine-specific token
     
     // Start heartbeat
     this.startHeartbeat();

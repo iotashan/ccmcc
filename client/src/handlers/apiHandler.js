@@ -1,10 +1,13 @@
-import fetch from 'node-fetch';
 import { ClientMessageTypes } from '../../../shared/protocol.js';
+import { ProjectsHandler } from './projects.js';
+import fs from 'fs/promises';
+import path from 'path';
 
 export class ApiHandler {
   constructor(connection, logger) {
     this.connection = connection;
     this.logger = logger;
+    this.projectsHandler = new ProjectsHandler(connection, logger);
     
     // Register handler
     this.connection.on('request:api', this.handleApiRequest.bind(this));
@@ -12,43 +15,82 @@ export class ApiHandler {
   
   async handleApiRequest(message) {
     const { requestId, data } = message;
-    const { path, method, query, body, headers } = data;
+    const { path: apiPath, method, query, body, headers } = data;
     
     try {
-      this.logger.info(`API Request: ${method} ${path}`);
+      this.logger.info(`API Request: ${method} ${apiPath}`);
       
-      // Build the full URL with query parameters
-      const url = new URL(path, 'http://localhost:3000/api');
-      if (query) {
-        Object.entries(query).forEach(([key, value]) => {
-          url.searchParams.append(key, value);
-        });
+      // Route API requests to appropriate handlers
+      let responseData;
+      let status = 200;
+      
+      // Handle different API endpoints
+      if (apiPath === '/projects' && method === 'GET') {
+        // Get projects list
+        responseData = await this.projectsHandler.getProjects();
+      } 
+      else if (apiPath.match(/^\/projects\/([^\/]+)\/sessions$/) && method === 'GET') {
+        // Get sessions for a project
+        const matches = apiPath.match(/^\/projects\/([^\/]+)\/sessions$/);
+        const projectName = decodeURIComponent(matches[1]);
+        const limit = parseInt(query?.limit || '10');
+        const offset = parseInt(query?.offset || '0');
+        responseData = await this.projectsHandler.getSessions(projectName, limit, offset);
       }
-      
-      // Prepare fetch options
-      const options = {
-        method,
-        headers: headers || {}
-      };
-      
-      // Add body for non-GET requests
-      if (body && method !== 'GET' && method !== 'HEAD') {
-        options.body = JSON.stringify(body);
-        if (!options.headers['content-type']) {
-          options.headers['content-type'] = 'application/json';
+      else if (apiPath.match(/^\/projects\/([^\/]+)\/sessions\/([^\/]+)\/messages$/) && method === 'GET') {
+        // Get messages for a session
+        const matches = apiPath.match(/^\/projects\/([^\/]+)\/sessions\/([^\/]+)\/messages$/);
+        const projectName = decodeURIComponent(matches[1]);
+        const sessionId = decodeURIComponent(matches[2]);
+        responseData = await this.getSessionMessages(projectName, sessionId);
+      }
+      else if (apiPath.match(/^\/projects\/([^\/]+)\/file$/) && method === 'GET') {
+        // Read file content
+        const filePath = query?.filePath;
+        if (!filePath || !path.isAbsolute(filePath)) {
+          status = 400;
+          responseData = { error: 'Invalid file path' };
+        } else {
+          try {
+            const content = await fs.readFile(filePath, 'utf8');
+            responseData = { content, path: filePath };
+          } catch (error) {
+            if (error.code === 'ENOENT') {
+              status = 404;
+              responseData = { error: 'File not found' };
+            } else if (error.code === 'EACCES') {
+              status = 403;
+              responseData = { error: 'Permission denied' };
+            } else {
+              throw error;
+            }
+          }
         }
       }
-      
-      // Make the local API call
-      const response = await fetch(url.toString(), options);
-      
-      // Get response data
-      const responseData = await response.text();
-      let parsedData;
-      try {
-        parsedData = JSON.parse(responseData);
-      } catch {
-        parsedData = responseData;
+      else if (apiPath.match(/^\/projects\/([^\/]+)\/file$/) && method === 'PUT') {
+        // Save file content
+        const { filePath, content } = body || {};
+        if (!filePath || !path.isAbsolute(filePath)) {
+          status = 400;
+          responseData = { error: 'Invalid file path' };
+        } else {
+          try {
+            await fs.writeFile(filePath, content, 'utf8');
+            responseData = { success: true, path: filePath };
+          } catch (error) {
+            if (error.code === 'EACCES') {
+              status = 403;
+              responseData = { error: 'Permission denied' };
+            } else {
+              throw error;
+            }
+          }
+        }
+      }
+      else {
+        // Unsupported endpoint
+        status = 404;
+        responseData = { error: `Endpoint ${method} ${apiPath} not found` };
       }
       
       // Send response back
@@ -56,9 +98,9 @@ export class ApiHandler {
         type: ClientMessageTypes.API_RESPONSE,
         requestId,
         machine_id: this.connection.machineId,
-        status: response.status,
-        headers: Object.fromEntries(response.headers.entries()),
-        data: parsedData
+        status,
+        headers: { 'content-type': 'application/json' },
+        data: responseData
       });
       
     } catch (error) {
@@ -73,5 +115,11 @@ export class ApiHandler {
         error: error.message
       });
     }
+  }
+  
+  async getSessionMessages(projectName, sessionId) {
+    // TODO: Implement reading session messages from Claude's session files
+    // For now, return empty messages
+    return { messages: [] };
   }
 }

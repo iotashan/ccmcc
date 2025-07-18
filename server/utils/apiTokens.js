@@ -96,21 +96,15 @@ export const clearTokenCache = () => {
 // Load all active tokens into cache on startup
 export const loadTokensIntoCache = async () => {
   try {
-    // Get all active tokens
-    const stmt = apiTokensDb.db?.prepare?.(`
-      SELECT t.*, u.username 
-      FROM api_tokens t 
-      JOIN users u ON t.user_id = u.id 
-      WHERE t.is_active = 1 
-      AND (t.expires_at IS NULL OR t.expires_at > datetime('now'))
-    `);
-    
-    if (stmt) {
-      const tokens = stmt.all();
+    // Get all active tokens using the getAllActiveTokens method
+    const tokens = apiTokensDb.getAllActiveTokens();
+    if (tokens && tokens.length > 0) {
       tokens.forEach(token => {
         tokenCache.set(token.token_hash, token);
       });
       console.log(`✅ Loaded ${tokens.length} API tokens into cache`);
+    } else {
+      console.log('✅ No API tokens to load into cache');
     }
   } catch (error) {
     console.error('Error loading tokens into cache:', error);

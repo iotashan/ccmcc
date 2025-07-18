@@ -142,23 +142,157 @@ The UI automatically discovers Claude Code projects from `~/.claude/projects/` a
 
 ### System Overview
 
+Claude Code UI follows a client-server architecture that enables remote machine control:
+
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Backend       │    │  Claude CLI     │
-│   (React/Vite)  │◄──►│ (Express/WS)    │◄──►│  Integration    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐
+│   Web UI        │         │   Server        │         │   Client        │
+│   (Browser)     │◄───────►│ (Central Hub)   │◄───────►│  (Remote PC)    │
+│                 │  HTTPS  │                 │   WS    │                 │
+└─────────────────┘         └─────────────────┘         └─────────────────┘
+        │                            │                            │
+        │                            │                            │
+        ▼                            ▼                            ▼
+   User Interface            Manages Connections           Claude CLI
+   - View projects           - Routes API calls           - Executes commands
+   - Chat interface          - Auth & security            - File operations
+   - File explorer           - WebSocket relay            - Git operations
 ```
+
+### How It Works
+
+1. **Server (Central Hub)** - Runs on a publicly accessible machine
+   - Manages authentication (JWT for web UI, API tokens for clients)
+   - Routes API requests from web UI to appropriate clients
+   - Maintains WebSocket connections with all clients
+   - Handles user management and permissions
+
+2. **Web UI** - Accessed through any modern browser
+   - Connects to server via HTTPS/WSS
+   - Provides interface for managing Claude Code projects
+   - Can control any connected client machine
+   - Uses JWT authentication for user sessions
+
+3. **Client (Remote Machines)** - Runs on machines with Claude CLI
+   - Connects to server using API token authentication
+   - Executes Claude CLI commands locally
+   - Handles file system operations
+   - Reports back to server with results
+
+### Remote Machine Control
+
+The key feature is that the Web UI never connects directly to clients. Instead:
+- Web UI sends requests to the server with a `X-Machine-ID` header
+- Server forwards these requests to the appropriate connected client
+- Client processes the request locally and sends results back
+- Server relays the results to the Web UI
+
+This architecture allows you to:
+- Control multiple remote machines from a single interface
+- Access Claude Code projects on any machine from anywhere
+- Maintain security through centralized authentication
+- Work with files and run commands on remote machines
+
+## Starting the Client
+
+### Prerequisites for Client Machine
+
+- Node.js v20 or higher
+- Claude CLI installed and configured
+- Network access to the server
+
+### Client Installation
+
+1. **Clone the repository on the client machine:**
+```bash
+git clone https://github.com/siteboon/claudecodeui.git
+cd claudecodeui/client
+```
+
+2. **Install client dependencies:**
+```bash
+npm install
+```
+
+3. **Configure the client:**
+```bash
+# Create configuration file
+cp config.example.json config.json
+
+# Edit config.json with your settings:
+{
+  "serverAddress": "https://your-server-address:3020",
+  "authToken": "your-api-token-from-server",
+  "clientName": "My Work Computer",
+  "capabilities": ["claude-cli", "git", "file-access", "shell"]
+}
+```
+
+4. **Start the client:**
+```bash
+npm start
+```
+
+The client will:
+- Connect to the server using WebSocket
+- Authenticate using the API token
+- Register itself with the server
+- Begin listening for commands from the Web UI
+
+### Getting an API Token
+
+1. Log into the Web UI
+2. Go to Settings → API Tokens
+3. Click "Create New Token"
+4. Give it a name (e.g., "Work Computer")
+5. Copy the token and use it in your client configuration
+
+### Running Client as a Service
+
+For production use, you may want to run the client as a system service:
+
+**On Linux (systemd):**
+```bash
+# Create service file
+sudo nano /etc/systemd/system/claude-code-client.service
+
+# Add this content:
+[Unit]
+Description=Claude Code UI Client
+After=network.target
+
+[Service]
+Type=simple
+User=your-user
+WorkingDirectory=/path/to/claudecodeui/client
+ExecStart=/usr/bin/node src/index.js
+Restart=on-failure
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+
+# Enable and start service
+sudo systemctl enable claude-code-client
+sudo systemctl start claude-code-client
+```
+
+**On Windows:** Consider using [node-windows](https://github.com/coreybutler/node-windows) or Task Scheduler.
+
+**On macOS:** Use launchd with a plist file in `~/Library/LaunchAgents/`.
 
 ### Backend (Node.js + Express)
 - **Express Server** - RESTful API with static file serving
-- **WebSocket Server** - Communication for chats and project refresh
-- **Claude CLI Integration** - Process spawning and management
-- **Session Management** - JSONL parsing and conversation persistence
-- **File System API** - Exposing file browser for projects
+- **WebSocket Server** - Bidirectional communication for real-time updates
+- **Authentication** - Dual auth system (JWT for web, API tokens for clients)
+- **Machine Management** - Tracks and routes to connected clients
+- **Request Forwarding** - Routes API calls to appropriate client machines
 
 ### Frontend (React + Vite)
 - **React 18** - Modern component architecture with hooks
 - **CodeMirror** - Advanced code editor with syntax highlighting
+- **Machine Selector** - UI for choosing which client to control
+- **Real-time Updates** - WebSocket connection for live data
 
 
 
