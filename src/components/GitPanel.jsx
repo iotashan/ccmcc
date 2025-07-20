@@ -3,7 +3,7 @@ import { GitBranch, GitCommit, Plus, Minus, RefreshCw, Check, X, ChevronDown, Ch
 import { MicButton } from './MicButton.jsx';
 import { authenticatedFetch } from '../utils/api';
 
-function GitPanel({ selectedProject, isMobile }) {
+function GitPanel({ selectedProject, isMobile, selectedMachine }) {
   const [gitStatus, setGitStatus] = useState(null);
   const [gitDiff, setGitDiff] = useState({});
   const [isLoading, setIsLoading] = useState(false);

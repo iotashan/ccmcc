@@ -34,6 +34,10 @@ export const ClientMessageTypes = {
   GIT_PULL: 'git_pull',
   GIT_PUSH: 'git_push',
   
+  // Shell operations
+  SHELL_OUTPUT: 'shell_output',
+  SHELL_EXIT: 'shell_exit',
+  
   // API forwarding
   API_RESPONSE: 'api_response'
 };
@@ -54,7 +58,13 @@ export const ServerMessageTypes = {
   REQUEST_CLAUDE_EXECUTE: 'request_claude_execute',
   REQUEST_FILE_OPERATION: 'request_file_operation',
   REQUEST_GIT_OPERATION: 'request_git_operation',
-  REQUEST_API_FORWARD: 'request_api_forward'
+  REQUEST_API_FORWARD: 'request_api_forward',
+  
+  // Shell requests
+  REQUEST_SHELL_INIT: 'request_shell_init',
+  REQUEST_SHELL_INPUT: 'request_shell_input',
+  REQUEST_SHELL_RESIZE: 'request_shell_resize',
+  REQUEST_SHELL_EXIT: 'request_shell_exit'
 };
 
 // Message types for UI clients

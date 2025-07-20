@@ -29,7 +29,7 @@ if (typeof document !== 'undefined') {
 // Global store for shell sessions to persist across tab switches
 const shellSessions = new Map();
 
-function Shell({ selectedProject, selectedSession, isActive }) {
+function Shell({ selectedProject, selectedSession, isActive, selectedMachine }) {
   const terminalRef = useRef(null);
   const terminal = useRef(null);
   const fitAddon = useRef(null);
@@ -414,8 +414,11 @@ function Shell({ selectedProject, selectedSession, isActive }) {
         wsBaseUrl = `${protocol}//${window.location.hostname}:${apiPort}`;
       }
       
-      // Include token in WebSocket URL as query parameter
-      const wsUrl = `${wsBaseUrl}/shell?token=${encodeURIComponent(token)}`;
+      // Include token and machine ID in WebSocket URL as query parameters
+      let wsUrl = `${wsBaseUrl}/shell?token=${encodeURIComponent(token)}`;
+      if (selectedMachine && selectedMachine !== 'local') {
+        wsUrl += `&machineId=${encodeURIComponent(selectedMachine)}`;
+      }
       
       ws.current = new WebSocket(wsUrl);
 

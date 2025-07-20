@@ -297,10 +297,11 @@ function MainContent({
             selectedProject={selectedProject} 
             selectedSession={selectedSession}
             isActive={activeTab === 'shell'}
+            selectedMachine={selectedMachine}
           />
         </div>
         <div className={`h-full overflow-hidden ${activeTab === 'git' ? 'block' : 'hidden'}`}>
-          <GitPanel selectedProject={selectedProject} isMobile={isMobile} />
+          <GitPanel selectedProject={selectedProject} isMobile={isMobile} selectedMachine={selectedMachine} />
         </div>
         <div className={`h-full overflow-hidden ${activeTab === 'preview' ? 'block' : 'hidden'}`}>
           {/* <LivePreviewPanel

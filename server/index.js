@@ -537,7 +537,9 @@ wss.on('connection', async (ws, request) => {
   console.log('✅ WebSocket authenticated:', user.username, 'via', user.authType);
   
   if (pathname === '/shell') {
-    handleShellConnection(ws);
+    // Extract machineId from query parameters
+    const machineId = urlObj.searchParams.get('machineId');
+    handleShellConnection(ws, user, machineId);
   } else if (pathname === '/ws') {
     handleChatConnection(ws, user);
   } else if (pathname === '/machine') {
@@ -625,9 +627,10 @@ function handleChatConnection(ws, user) {
 }
 
 // Handle shell WebSocket connections
-function handleShellConnection(ws) {
-  console.log('🐚 Shell client connected');
+function handleShellConnection(ws, user, machineId) {
+  console.log('🐚 Shell client connected', machineId ? `for machine: ${machineId}` : '(local)');
   let shellProcess = null;
+  let isRemoteShell = false;
   
   ws.on('message', async (message) => {
     try {
@@ -642,7 +645,48 @@ function handleShellConnection(ws) {
         
         console.log('🚀 Starting shell in:', projectPath);
         console.log('📋 Session info:', hasSession ? `Resume session ${sessionId}` : 'New session');
+        console.log('🖥️  Machine:', machineId || 'local');
         
+        // Check if this is a remote shell request
+        if (machineId && machineId !== 'local') {
+          isRemoteShell = true;
+          
+          // Register this WebSocket as the shell UI client for routing responses
+          machineManager.registerShellUIClient(ws, machineId);
+          
+          // First send a welcome message
+          const welcomeMsg = hasSession ? 
+            `\x1b[36mResuming Claude session ${sessionId} on remote machine: ${machineId}\x1b[0m\r\n` :
+            `\x1b[36mStarting new Claude session on remote machine: ${machineId}\x1b[0m\r\n`;
+          
+          ws.send(JSON.stringify({
+            type: 'output',
+            data: welcomeMsg
+          }));
+          
+          // Route shell init to remote machine
+          const routed = machineManager.routeToMachine(machineId, {
+            type: ServerMessageTypes.REQUEST_SHELL_INIT,
+            request_id: crypto.randomUUID(),
+            projectPath,
+            sessionId,
+            hasSession,
+            cols: data.cols || 80,
+            rows: data.rows || 24
+          });
+          
+          if (!routed) {
+            ws.send(JSON.stringify({
+              type: 'output',
+              data: '\r\n\x1b[31mError: Machine is offline or unavailable\x1b[0m\r\n'
+            }));
+            ws.close();
+          }
+          
+          return; // Don't spawn local shell
+        }
+        
+        // Local shell execution
         // First send a welcome message
         const welcomeMsg = hasSession ? 
           `\x1b[36mResuming Claude session ${sessionId} in: ${projectPath}\x1b[0m\r\n` :
@@ -752,8 +796,22 @@ function handleShellConnection(ws) {
         }
         
       } else if (data.type === 'input') {
-        // Send input to shell process
-        if (shellProcess && shellProcess.write) {
+        // Route input to remote machine if this is a remote shell
+        if (isRemoteShell && machineId) {
+          const routed = machineManager.routeToMachine(machineId, {
+            type: ServerMessageTypes.REQUEST_SHELL_INPUT,
+            request_id: crypto.randomUUID(),
+            data: data.data
+          });
+          
+          if (!routed) {
+            ws.send(JSON.stringify({
+              type: 'output',
+              data: '\r\n\x1b[31mError: Lost connection to remote machine\x1b[0m\r\n'
+            }));
+          }
+        } else if (shellProcess && shellProcess.write) {
+          // Local shell input
           try {
             shellProcess.write(data.data);
           } catch (error) {
@@ -763,8 +821,16 @@ function handleShellConnection(ws) {
           console.warn('No active shell process to send input to');
         }
       } else if (data.type === 'resize') {
-        // Handle terminal resize
-        if (shellProcess && shellProcess.resize) {
+        // Route resize to remote machine if this is a remote shell
+        if (isRemoteShell && machineId) {
+          machineManager.routeToMachine(machineId, {
+            type: ServerMessageTypes.REQUEST_SHELL_RESIZE,
+            request_id: crypto.randomUUID(),
+            cols: data.cols,
+            rows: data.rows
+          });
+        } else if (shellProcess && shellProcess.resize) {
+          // Local shell resize
           console.log('Terminal resize requested:', data.cols, 'x', data.rows);
           shellProcess.resize(data.cols, data.rows);
         }
@@ -782,6 +848,19 @@ function handleShellConnection(ws) {
   
   ws.on('close', () => {
     console.log('🔌 Shell client disconnected');
+    
+    // Clean up remote shell connection
+    if (isRemoteShell && machineId) {
+      machineManager.unregisterShellUIClient(ws, machineId);
+      
+      // Send shell exit command to remote machine
+      machineManager.routeToMachine(machineId, {
+        type: ServerMessageTypes.REQUEST_SHELL_EXIT,
+        request_id: crypto.randomUUID()
+      });
+    }
+    
+    // Clean up local shell process
     if (shellProcess && shellProcess.kill) {
       console.log('🔴 Killing shell process:', shellProcess.pid);
       shellProcess.kill();
@@ -945,6 +1024,32 @@ function handleMachineConnection(ws, user) {
           // Handle API response from machine
           if (machineId) {
             machineManager.handleResponse(machineId, data);
+          }
+          break;
+          
+        case ClientMessageTypes.SHELL_OUTPUT:
+          // Route shell output to the UI client
+          if (machineId && machineManager.shellUIClients) {
+            const shellWs = machineManager.shellUIClients.get(machineId);
+            if (shellWs && shellWs.readyState === ws.OPEN) {
+              shellWs.send(JSON.stringify({
+                type: 'output',
+                data: data.data
+              }));
+            }
+          }
+          break;
+          
+        case ClientMessageTypes.SHELL_EXIT:
+          // Handle shell exit
+          if (machineId && machineManager.shellUIClients) {
+            const shellWs = machineManager.shellUIClients.get(machineId);
+            if (shellWs && shellWs.readyState === ws.OPEN) {
+              shellWs.send(JSON.stringify({
+                type: 'output',
+                data: `\r\n\x1b[33mRemote shell exited with code ${data.exitCode}${data.signal ? ` (${data.signal})` : ''}\x1b[0m\r\n`
+              }));
+            }
           }
           break;
           

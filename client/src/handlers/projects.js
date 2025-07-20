@@ -69,6 +69,10 @@ export class ProjectsHandler {
                 // Convert /C/Users/... to C:/Users/...
                 actualProjectPath = actualProjectPath.substring(1, 2) + ':' + actualProjectPath.substring(2);
               }
+              // Use the decoded path as the display name if no custom display name was set
+              if (displayName === projectName) {
+                displayName = actualProjectPath;
+              }
             }
             
             projects.push({

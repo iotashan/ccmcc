@@ -4,6 +4,7 @@ import { MachineConnection } from './connection.js';
 import { ClaudeHandler } from './handlers/claude.js';
 import { ProjectsHandler } from './handlers/projects.js';
 import { ApiHandler } from './handlers/apiHandler.js';
+import { ShellHandler } from './handlers/shell.js';
 
 // Parse command line arguments
 const cliOptions = parseCommandLineArgs(process.argv.slice(2));
@@ -25,6 +26,7 @@ const connection = new MachineConnection(finalConfig, logger);
 const claudeHandler = new ClaudeHandler(connection, logger);
 const projectsHandler = new ProjectsHandler(connection, logger);
 const apiHandler = new ApiHandler(connection, logger);
+const shellHandler = new ShellHandler(connection, logger);
 
 // Set up event handlers
 connection.on('registered', (machine) => {
@@ -57,15 +59,34 @@ connection.on('request:sessions', async (message) => {
   }
 });
 
+// Shell event handlers
+connection.on('request:shell:init', (message) => {
+  shellHandler.handle({ ...message, type: 'request_shell_init' });
+});
+
+connection.on('request:shell:input', (message) => {
+  shellHandler.handle({ ...message, type: 'request_shell_input' });
+});
+
+connection.on('request:shell:resize', (message) => {
+  shellHandler.handle({ ...message, type: 'request_shell_resize' });
+});
+
+connection.on('request:shell:exit', (message) => {
+  shellHandler.handle({ ...message, type: 'request_shell_exit' });
+});
+
 // Handle process termination
 process.on('SIGINT', () => {
   logger.info('Shutting down...');
+  shellHandler.cleanup();
   connection.disconnect();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
   logger.info('Shutting down...');
+  shellHandler.cleanup();
   connection.disconnect();
   process.exit(0);
 });

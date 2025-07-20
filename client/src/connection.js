@@ -99,6 +99,22 @@ export class MachineConnection extends EventEmitter {
           this.emit('request:api', message);
           break;
           
+        case ServerMessageTypes.REQUEST_SHELL_INIT:
+          this.emit('request:shell:init', message);
+          break;
+          
+        case ServerMessageTypes.REQUEST_SHELL_INPUT:
+          this.emit('request:shell:input', message);
+          break;
+          
+        case ServerMessageTypes.REQUEST_SHELL_RESIZE:
+          this.emit('request:shell:resize', message);
+          break;
+          
+        case ServerMessageTypes.REQUEST_SHELL_EXIT:
+          this.emit('request:shell:exit', message);
+          break;
+          
         default:
           this.logger.warn('Unknown message type:', message.type);
       }

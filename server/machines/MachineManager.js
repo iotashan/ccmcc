@@ -67,6 +67,24 @@ class MachineManager {
     this.userConnections.delete(ws);
   }
 
+  // Register a shell UI client for a specific machine
+  registerShellUIClient(ws, machineId) {
+    // Store shell UI client reference for routing shell output
+    if (!this.shellUIClients) {
+      this.shellUIClients = new Map();
+    }
+    this.shellUIClients.set(machineId, ws);
+    console.log(`🐚 Registered shell UI client for machine ${machineId}`);
+  }
+
+  // Unregister a shell UI client
+  unregisterShellUIClient(ws, machineId) {
+    if (this.shellUIClients && this.shellUIClients.get(machineId) === ws) {
+      this.shellUIClients.delete(machineId);
+      console.log(`🐚 Unregistered shell UI client for machine ${machineId}`);
+    }
+  }
+
   // Register a machine connection
   async registerMachine(ws, machineData) {
     try {
