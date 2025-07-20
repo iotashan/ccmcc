@@ -3,7 +3,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
-import { X, Plus, Settings, Shield, AlertTriangle, Server, Edit3, Trash2, Play, Download, Toggle } from 'lucide-react';
+import { X, Plus, Settings, Shield, AlertTriangle, Server, Edit3, Trash2, Play, Download } from 'lucide-react';
 import { api } from '../utils/api';
 
 function ProjectMCPPanel({ selectedProject, selectedMachine }) {
