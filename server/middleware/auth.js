@@ -148,7 +148,8 @@ const authenticateWebSocket = async (token, clientIP = null) => {
         id: apiTokenData.user_id,
         userId: apiTokenData.user_id,
         username: apiTokenData.username,
-        authType: 'api_token'
+        authType: 'api_token',
+        apiToken: token  // Include the actual token for encryption key derivation
       };
     }
 
