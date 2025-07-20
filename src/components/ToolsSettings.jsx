@@ -101,12 +101,7 @@ function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
       const token = localStorage.getItem('auth-token');
       
       // First try to get servers using Claude CLI
-      const cliResponse = await fetch('/api/mcp/cli/list', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const cliResponse = await api.get('/api/mcp/cli/list');
       
       if (cliResponse.ok) {
         const cliData = await cliResponse.json();
@@ -134,12 +129,7 @@ function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
       }
       
       // Fallback to direct config reading
-      const response = await fetch('/api/mcp/servers?scope=user', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await api.get('/api/mcp/servers?scope=user');
       
       if (response.ok) {
         const data = await response.json();
@@ -162,21 +152,14 @@ function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
       }
       
       // Use Claude CLI to add the server
-      const response = await fetch('/api/mcp/cli/add', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: serverData.name,
-          type: serverData.type,
-          command: serverData.config?.command,
-          args: serverData.config?.args || [],
-          url: serverData.config?.url,
-          headers: serverData.config?.headers || {},
-          env: serverData.config?.env || {}
-        })
+      const response = await api.post('/api/mcp/cli/add', {
+        name: serverData.name,
+        type: serverData.type,
+        command: serverData.config?.command,
+        args: serverData.config?.args || [],
+        url: serverData.config?.url,
+        headers: serverData.config?.headers || {},
+        env: serverData.config?.env || {}
       });
       
       if (response.ok) {
@@ -202,13 +185,7 @@ function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
       const token = localStorage.getItem('auth-token');
       
       // Use Claude CLI to remove the server
-      const response = await fetch(`/api/mcp/cli/remove/${serverId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await api.delete(`/api/mcp/cli/remove/${serverId}`);
       
       if (response.ok) {
         const result = await response.json();
@@ -231,13 +208,7 @@ function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
   const testMcpServer = async (serverId, scope = 'user') => {
     try {
       const token = localStorage.getItem('auth-token');
-      const response = await fetch(`/api/mcp/servers/${serverId}/test?scope=${scope}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await api.post(`/api/mcp/servers/${serverId}/test?scope=${scope}`, {});
       
       if (response.ok) {
         const data = await response.json();
@@ -255,14 +226,7 @@ function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
   const testMcpConfiguration = async (formData) => {
     try {
       const token = localStorage.getItem('auth-token');
-      const response = await fetch('/api/mcp/servers/test', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      });
+      const response = await api.post('/api/mcp/servers/test', formData);
       
       if (response.ok) {
         const data = await response.json();
@@ -280,13 +244,7 @@ function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
   const discoverMcpTools = async (serverId, scope = 'user') => {
     try {
       const token = localStorage.getItem('auth-token');
-      const response = await fetch(`/api/mcp/servers/${serverId}/tools?scope=${scope}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await api.post(`/api/mcp/servers/${serverId}/tools?scope=${scope}`, {});
       
       if (response.ok) {
         const data = await response.json();
