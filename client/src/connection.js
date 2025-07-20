@@ -2,6 +2,7 @@ import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { PROTOCOL_VERSION, ClientMessageTypes, ServerMessageTypes } from '../../shared/protocol.js';
 import { saveAuthToken } from './config.js';
+import { decryptWebSocketMessage, encryptWebSocketMessage, deriveEncryptionKeyFromToken } from './utils/encryption.js';
 
 export class MachineConnection extends EventEmitter {
   constructor(config, logger) {
@@ -14,11 +15,15 @@ export class MachineConnection extends EventEmitter {
     this.heartbeatTimer = null;
     this.machineId = null;
     this.authToken = config.authToken;
+    // Derive encryption key from API token
+    this.encryptionKey = deriveEncryptionKeyFromToken(config.authToken);
   }
 
   async connect() {
     try {
-      const serverUrl = this.config.serverAddress.replace(/^http/, 'ws');
+      const serverUrl = this.config.serverAddress
+        .replace(/^https/, 'wss')
+        .replace(/^http/, 'ws');
       // Always use the API token from config for authentication
       const url = `${serverUrl}/machine?token=${encodeURIComponent(this.config.authToken || '')}`;
       
@@ -55,7 +60,7 @@ export class MachineConnection extends EventEmitter {
 
   handleMessage(data) {
     try {
-      const message = JSON.parse(data.toString());
+      const message = decryptWebSocketMessage(data.toString(), this.encryptionKey);
       
       if (this.config.debug) {
         this.logger.debug('Received:', message.type);
@@ -187,7 +192,8 @@ export class MachineConnection extends EventEmitter {
 
   send(message) {
     if (this.isConnected && this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(message));
+      const encrypted = encryptWebSocketMessage(message, this.encryptionKey);
+      this.ws.send(encrypted);
       return true;
     }
     return false;

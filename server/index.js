@@ -1095,8 +1095,15 @@ function handleMachineConnection(ws, user, connectionId) {
   let machineId = null;
   let encryptionKey = null;
   
-  // Get user's encryption key
-  if (user && user.id) {
+  // Get encryption key for machine clients
+  // For machine clients, derive encryption key from their API token
+  if (user && user.authType === 'api_token' && user.apiToken) {
+    // Use the API token to derive an encryption key
+    const crypto = require('crypto');
+    // Create a deterministic key from the API token
+    encryptionKey = crypto.createHash('sha256').update(user.apiToken).digest('base64');
+  } else if (user && user.id) {
+    // For regular users, use their stored encryption key
     encryptionKey = userDb.getEncryptionKey(user.id);
   }
   
