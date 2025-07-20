@@ -38,6 +38,11 @@ export const ClientMessageTypes = {
   SHELL_OUTPUT: 'shell_output',
   SHELL_EXIT: 'shell_exit',
   
+  // Claude session tracking
+  CLAUDE_SESSION_START: 'claude_session_start',
+  CLAUDE_SESSION_UPDATE: 'claude_session_update',
+  CLAUDE_SESSION_END: 'claude_session_end',
+  
   // API forwarding
   API_RESPONSE: 'api_response'
 };

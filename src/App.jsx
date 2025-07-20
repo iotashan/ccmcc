@@ -92,6 +92,9 @@ function AppContent() {
   // until the conversation completes or is aborted.
   const [activeSessions, setActiveSessions] = useState(new Set()); // Track sessions with active conversations
   
+  // Claude session tracking
+  const [waitingSessions, setWaitingSessions] = useState({}); // Track waiting sessions per machine
+  
   const { ws, sendMessage, messages } = useWebSocket();
   
   // Machine management
@@ -229,6 +232,10 @@ function AppContent() {
             }
           }
         }
+      } else if (latestMessage.type === 'claude_session_update') {
+        // Handle Claude session updates from hooks
+        console.log('Received Claude session update:', latestMessage);
+        setWaitingSessions(latestMessage.waitingSessions || {});
       }
     }
   }, [messages, selectedProject, selectedSession, activeSessions]);
@@ -575,6 +582,7 @@ function AppContent() {
               selectedMachine={selectedMachine}
               onMachineSelect={selectMachine}
               onMachineRemove={removeMachine}
+              waitingSessions={waitingSessions}
             />
           </div>
         </div>
@@ -624,6 +632,7 @@ function AppContent() {
               selectedMachine={selectedMachine}
               onMachineSelect={selectMachine}
               onMachineRemove={removeMachine}
+              waitingSessions={waitingSessions}
             />
           </div>
         </div>

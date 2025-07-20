@@ -1,11 +1,14 @@
 import { spawn } from 'child_process';
 import { ClientMessageTypes } from '../../../shared/protocol.js';
+import ClaudeRunner from '../../../src/utils/claudeRunner.js';
 
 export class ClaudeHandler {
-  constructor(connection, logger) {
+  constructor(connection, logger, config) {
     this.connection = connection;
     this.logger = logger;
+    this.config = config;
     this.activeProcesses = new Map();
+    this.claudeRunner = new ClaudeRunner();
   }
 
   async handle(message) {
@@ -34,78 +37,55 @@ export class ClaudeHandler {
       }
       
       // Change to project directory if specified
-      const cwd = options?.projectPath || process.cwd();
+      const projectPath = options?.projectPath || process.cwd();
       
-      this.logger.info(`Spawning Claude with args: ${JSON.stringify(args)}`);
-      this.logger.info(`Working directory: ${cwd}`);
+      this.logger.info(`Running Claude with hooks enabled`);
+      this.logger.info(`Working directory: ${projectPath}`);
       
-      // Spawn Claude process
-      let claudeProcess;
-      try {
-        // Use 'claude' command from PATH
-        claudeProcess = spawn('claude', args, {
-          cwd,
-          env: process.env,
-          shell: true // Use shell to find claude in PATH
-        });
-        this.logger.info('Claude process spawned successfully');
-      } catch (spawnError) {
-        this.logger.error('Failed to spawn Claude process:', spawnError);
-        throw spawnError;
-      }
+      // Generate session ID
+      const sessionId = options?.sessionId || `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Run Claude with hooks injected
+      const result = await this.claudeRunner.runWithHooks({
+        projectPath,
+        machineId: this.config.machineId,
+        sessionId,
+        serverUrl: `http://${this.config.serverHost}:${this.config.serverPort}`,
+        command: 'claude',
+        args,
+        onData: ({ type, data }) => {
+          this.logger.info(`Claude ${type}:`, data);
+          this.connection.send({
+            type: ClientMessageTypes.CLAUDE_RESPONSE,
+            request_id,
+            data,
+            stream: type
+          });
+        },
+        onError: (error) => {
+          this.logger.error('Claude process error:', error);
+          this.connection.send({
+            type: ClientMessageTypes.CLAUDE_ERROR,
+            request_id,
+            error: error.message
+          });
+        },
+        onComplete: ({ code, signal }) => {
+          this.logger.info(`Claude process exited with code ${code}`);
+          this.connection.send({
+            type: ClientMessageTypes.CLAUDE_COMPLETE,
+            request_id,
+            code,
+            signal
+          });
+          this.activeProcesses.delete(request_id);
+        }
+      });
       
       // Store process reference
-      this.activeProcesses.set(request_id, claudeProcess);
-      
-      // Handle stdout
-      claudeProcess.stdout.on('data', (data) => {
-        const output = data.toString();
-        this.logger.info('Claude stdout:', output);
-        this.connection.send({
-          type: ClientMessageTypes.CLAUDE_RESPONSE,
-          request_id,
-          data: output,
-          stream: 'stdout'
-        });
-      });
-      
-      // Handle stderr
-      claudeProcess.stderr.on('data', (data) => {
-        this.logger.error('Claude stderr:', data.toString());
-        this.connection.send({
-          type: ClientMessageTypes.CLAUDE_RESPONSE,
-          request_id,
-          data: data.toString(),
-          stream: 'stderr'
-        });
-      });
-      
-      // Handle process exit
-      claudeProcess.on('exit', (code, signal) => {
-        this.logger.info(`Claude process exited with code ${code}`);
-        
-        this.connection.send({
-          type: ClientMessageTypes.CLAUDE_COMPLETE,
-          request_id,
-          code,
-          signal
-        });
-        
-        this.activeProcesses.delete(request_id);
-      });
-      
-      // Handle errors
-      claudeProcess.on('error', (error) => {
-        this.logger.error('Claude process error:', error);
-        
-        this.connection.send({
-          type: ClientMessageTypes.CLAUDE_ERROR,
-          request_id,
-          error: error.message
-        });
-        
-        this.activeProcesses.delete(request_id);
-      });
+      if (result.process) {
+        this.activeProcesses.set(request_id, result);
+      }
       
     } catch (error) {
       this.logger.error('Error executing Claude:', error);
@@ -120,9 +100,22 @@ export class ClaudeHandler {
   
   abort(sessionId) {
     // Find and kill process by session ID
-    for (const [requestId, process] of this.activeProcesses) {
-      // TODO: Match by session ID
-      process.kill('SIGTERM');
+    for (const [requestId, result] of this.activeProcesses) {
+      if (result.sessionId === sessionId && result.kill) {
+        result.kill();
+        this.activeProcesses.delete(requestId);
+        break;
+      }
     }
+  }
+  
+  // Clean up on exit
+  cleanup() {
+    for (const [requestId, result] of this.activeProcesses) {
+      if (result.kill) {
+        result.kill();
+      }
+    }
+    this.activeProcesses.clear();
   }
 }
