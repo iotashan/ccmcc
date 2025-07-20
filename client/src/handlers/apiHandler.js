@@ -220,7 +220,7 @@ export class ApiHandler {
         status = 501;
         responseData = { error: 'Image upload not supported on remote machines' };
       }
-      else if (apiPath.startsWith('/api/git/')) {
+      else if (apiPath.startsWith('/git/') || apiPath.startsWith('/api/git/')) {
         // Route git requests to GitHandler
         // Create a message for the git handler
         const gitMessage = {
