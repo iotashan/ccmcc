@@ -491,6 +491,77 @@ function reconnect() {
 }
 ```
 
+### 5. Shell Operations (NEW: July 19, 2025)
+
+#### Shell Connection (Web UI → Server)
+
+```
+ws://server:3020/shell?token=<jwt-token>&machineId=<machine-id>
+```
+
+The shell WebSocket connection requires:
+- JWT token for authentication
+- Optional machineId for routing to remote machines
+
+#### Shell Initialization (Server → Machine)
+
+```json
+{
+  "type": "shell:init",
+  "request_id": "shell-session-uuid",
+  "data": {
+    "cols": 80,
+    "rows": 24,
+    "cwd": "/path/to/project"
+  }
+}
+```
+
+#### Shell Input (Server → Machine)
+
+```json
+{
+  "type": "shell:input",
+  "request_id": "shell-session-uuid",
+  "data": "ls -la\n"
+}
+```
+
+#### Shell Output (Machine → Server → Web UI)
+
+```json
+{
+  "type": "shell:output",
+  "request_id": "shell-session-uuid",
+  "data": "total 48\ndrwxr-xr-x  6 user  staff   192 Jul 19 10:00 .\n"
+}
+```
+
+#### Shell Resize (Server → Machine)
+
+```json
+{
+  "type": "shell:resize",
+  "request_id": "shell-session-uuid",
+  "data": {
+    "cols": 120,
+    "rows": 40
+  }
+}
+```
+
+#### Shell Exit (Server → Machine)
+
+```json
+{
+  "type": "shell:exit",
+  "request_id": "shell-session-uuid"
+}
+```
+
+**Important Fix (July 19, 2025):**
+The server now maintains a consistent `shellSessionId` across all shell operations. Previously, each operation generated a new `request_id`, causing "No active shell session" errors.
+
 ## Security Considerations
 
 ### 1. Authentication
@@ -543,3 +614,8 @@ Client:
    - Verify token is valid
    - Check token hasn't been revoked
    - Ensure proper header format
+
+4. **Shell Session Issues (Fixed: July 19, 2025)**
+   - Previous: Each shell operation generated new request_id
+   - Fixed: Server maintains consistent shellSessionId
+   - Verify machineId included in WebSocket URL for remote shells

@@ -28,6 +28,15 @@ All API endpoints require authentication unless specified otherwise.
 - **Web UI**: JWT token in Authorization header or cookie
 - **Machines**: API token for WebSocket connections only
 
+### Machine Routing (Updated: July 19, 2025)
+
+API requests can be routed to specific machines using the `X-Machine-ID` header:
+
+- **Local execution**: Omit header or use `X-Machine-ID: local`
+- **Remote execution**: Use `X-Machine-ID: <machine-uuid>`
+
+**Important**: All protected API routes (git, mcp, projects, etc.) support machine routing. The server middleware automatically forwards requests to the appropriate machine when the header is present.
+
 ### Endpoints
 
 #### Authentication
@@ -435,6 +444,111 @@ Switch branches.
 }
 ```
 
+#### MCP Operations (Model Context Protocol)
+
+All MCP endpoints require `X-Machine-ID` header for machine-specific operations.
+
+##### GET /mcp/cli/list
+
+List installed MCP servers using Claude CLI.
+
+**Headers:**
+```
+X-Machine-ID: <machine-uuid> (optional, defaults to local)
+```
+
+**Response:**
+```typescript
+{
+  success: boolean;
+  output: string;
+  servers: Array<{
+    name: string;
+    type: "stdio" | "http" | "sse";
+    status: "active";
+  }>;
+}
+```
+
+##### POST /mcp/cli/add
+
+Add an MCP server.
+
+**Headers:**
+```
+X-Machine-ID: <machine-uuid> (optional, defaults to local)
+```
+
+**Request:**
+```typescript
+{
+  name: string;
+  type?: "stdio" | "http" | "sse"; // default: "stdio"
+  command?: string; // for stdio
+  args?: string[]; // for stdio
+  url?: string; // for http/sse
+  headers?: Record<string, string>; // for http/sse
+  env?: Record<string, string>; // for stdio
+}
+```
+
+**Response:**
+```typescript
+{
+  success: boolean;
+  output: string;
+  message: string;
+}
+```
+
+##### DELETE /mcp/cli/remove/:name
+
+Remove an MCP server.
+
+**Parameters:**
+- `name` - MCP server name
+
+**Headers:**
+```
+X-Machine-ID: <machine-uuid> (optional, defaults to local)
+```
+
+**Response:**
+```typescript
+{
+  success: boolean;
+  output: string;
+  message: string;
+}
+```
+
+##### GET /mcp/cli/get/:name
+
+Get MCP server details.
+
+**Parameters:**
+- `name` - MCP server name
+
+**Headers:**
+```
+X-Machine-ID: <machine-uuid> (optional, defaults to local)
+```
+
+**Response:**
+```typescript
+{
+  success: boolean;
+  output: string;
+  server: {
+    name?: string;
+    type?: string;
+    command?: string;
+    url?: string;
+    raw_output: string;
+  };
+}
+```
+
 #### Settings
 
 ##### GET /settings
@@ -481,6 +595,19 @@ Authentication via JWT cookie or token query parameter.
 ws://localhost:3020/machine?token=<api-token>
 wss://your-domain.com/machine?token=<api-token>
 ```
+
+#### Shell WebSocket (Updated: July 19, 2025)
+
+```
+ws://localhost:3020/shell?token=<jwt-token>&machineId=<machine-uuid>
+wss://your-domain.com/shell?token=<jwt-token>&machineId=<machine-uuid>
+```
+
+Query parameters:
+- `token` - JWT authentication token (required)
+- `machineId` - Target machine UUID (optional, defaults to local)
+
+**Important Fix**: The server now maintains a consistent `shellSessionId` across all shell operations. Previously, each operation generated a new request_id causing session errors.
 
 ### Message Format
 

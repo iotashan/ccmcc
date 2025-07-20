@@ -87,9 +87,9 @@ Claude Code UI implements a **3-tier architecture**:
 - WebSocket messages for real-time updates implemented
 - UI not always reflecting current server state
 
-### 🚨 Known Issues
+### 🚨 Known Issues (Recently Fixed)
 
-1. **Machine List UI Synchronization**
+1. **~~Machine List UI Synchronization~~** ✅ FIXED
    - **Severity:** Medium
    - **Impact:** Connected machines may not appear in Web UI dropdown
    - **Workaround:** Core functionality works; manual refresh may resolve
@@ -100,6 +100,26 @@ Claude Code UI implements a **3-tier architecture**:
    - **Impact:** Long-running npm processes need timeout parameter
    - **Workaround:** Use `timeout 3s npm run server` for testing
    - **Note:** Documented limitation, not a blocker
+
+### 🛠️ Recent Bug Fixes (July 19, 2025)
+
+#### **1. Shell Operations Routing** ✅ FIXED
+- **Issue:** Shell operations failed on remote machines with "No active shell session" errors
+- **Root Cause:** Server generated new `request_id` for each shell operation (init, input, resize, exit)
+- **Fix:** Implemented consistent `shellSessionId` that persists across all shell operations
+- **Impact:** Shell sessions now work correctly on remote machines
+
+#### **2. Git Operations Routing** ✅ FIXED  
+- **Issue:** Git operations attempted to access server paths instead of remote machine paths
+- **Root Cause:** Git routes were defined before machine routing middleware in Express
+- **Fix:** Moved all protected API routes (git, mcp, machines, settings) after machine routing middleware
+- **Impact:** Git operations now correctly route to remote machines and show proper repository status
+
+#### **3. MCP Operations Machine-Specific** ✅ FIXED
+- **Issue:** MCP (Model Context Protocol) configurations were not machine-specific
+- **Root Cause:** ToolsSettings component used direct `fetch()` calls instead of `api` utility
+- **Fix:** Updated all MCP-related API calls to use `api` utility which includes X-Machine-ID header
+- **Impact:** MCP server configurations are now properly isolated per machine
 
 ### 🎯 Current System Capabilities
 
