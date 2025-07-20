@@ -169,18 +169,6 @@ app.use('/api', validateApiKey);
 // Authentication routes (public)
 app.use('/api/auth', authRoutes);
 
-// Git API Routes (protected)
-app.use('/api/git', authenticateToken, gitRoutes);
-
-// MCP API Routes (protected)
-app.use('/api/mcp', authenticateToken, mcpRoutes);
-
-// Machine API Routes (protected)
-app.use('/api/machines', authenticateToken, machineRoutes);
-
-// Settings API Routes (protected)
-app.use('/api/settings', authenticateToken, settingsRoutes);
-
 // API Token Management Routes (protected)
 app.get('/api/tokens', authenticateToken, (req, res) => {
   try {
@@ -243,6 +231,19 @@ app.use('/api', authenticateToken, async (req, res, next) => {
 // This must come after authentication and encryption but before the actual route handlers
 const machineRouter = machineRoutingMiddleware(machineManager);
 app.use('/api', authenticateToken, machineRouter);
+
+// Protected API Routes - these must come AFTER machine routing middleware
+// Git API Routes (protected)
+app.use('/api/git', authenticateToken, gitRoutes);
+
+// MCP API Routes (protected)
+app.use('/api/mcp', authenticateToken, mcpRoutes);
+
+// Machine API Routes (protected)
+app.use('/api/machines', authenticateToken, machineRoutes);
+
+// Settings API Routes (protected)
+app.use('/api/settings', authenticateToken, settingsRoutes);
 
 // Static files served after API routes
 app.use(express.static(path.join(__dirname, '../dist')));
@@ -631,6 +632,7 @@ function handleShellConnection(ws, user, machineId) {
   console.log('🐚 Shell client connected', machineId ? `for machine: ${machineId}` : '(local)');
   let shellProcess = null;
   let isRemoteShell = false;
+  let shellSessionId = null;
   
   ws.on('message', async (message) => {
     try {
@@ -654,6 +656,9 @@ function handleShellConnection(ws, user, machineId) {
           // Register this WebSocket as the shell UI client for routing responses
           machineManager.registerShellUIClient(ws, machineId);
           
+          // Generate a consistent shell session ID for this connection
+          shellSessionId = crypto.randomUUID();
+          
           // First send a welcome message
           const welcomeMsg = hasSession ? 
             `\x1b[36mResuming Claude session ${sessionId} on remote machine: ${machineId}\x1b[0m\r\n` :
@@ -667,7 +672,7 @@ function handleShellConnection(ws, user, machineId) {
           // Route shell init to remote machine
           const routed = machineManager.routeToMachine(machineId, {
             type: ServerMessageTypes.REQUEST_SHELL_INIT,
-            request_id: crypto.randomUUID(),
+            request_id: shellSessionId,
             projectPath,
             sessionId,
             hasSession,
@@ -800,7 +805,7 @@ function handleShellConnection(ws, user, machineId) {
         if (isRemoteShell && machineId) {
           const routed = machineManager.routeToMachine(machineId, {
             type: ServerMessageTypes.REQUEST_SHELL_INPUT,
-            request_id: crypto.randomUUID(),
+            request_id: shellSessionId,
             data: data.data
           });
           
@@ -825,7 +830,7 @@ function handleShellConnection(ws, user, machineId) {
         if (isRemoteShell && machineId) {
           machineManager.routeToMachine(machineId, {
             type: ServerMessageTypes.REQUEST_SHELL_RESIZE,
-            request_id: crypto.randomUUID(),
+            request_id: shellSessionId,
             cols: data.cols,
             rows: data.rows
           });
@@ -856,7 +861,7 @@ function handleShellConnection(ws, user, machineId) {
       // Send shell exit command to remote machine
       machineManager.routeToMachine(machineId, {
         type: ServerMessageTypes.REQUEST_SHELL_EXIT,
-        request_id: crypto.randomUUID()
+        request_id: shellSessionId
       });
     }
     
