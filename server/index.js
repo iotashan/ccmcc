@@ -35,6 +35,7 @@ import os from 'os';
 import pty from 'node-pty';
 import fetch from 'node-fetch';
 import mime from 'mime-types';
+import crypto from 'crypto';
 
 import { getProjects, getSessions, getSessionMessages, renameProject, deleteSession, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache } from './projects.js';
 import { spawnClaude, abortClaudeSession } from './claude-cli.js';
@@ -43,6 +44,7 @@ import authRoutes from './routes/auth.js';
 import mcpRoutes from './routes/mcp.js';
 import machineRoutes from './routes/machines.js';
 import settingsRoutes from './routes/settings.js';
+import securityRoutes from './routes/security.js';
 import { initializeDatabase, machineDb } from './database/db.js';
 import { validateApiKey, authenticateToken, authenticateWebSocket } from './middleware/auth.js';
 import { machineManager } from './machines/MachineManager.js';
@@ -51,6 +53,14 @@ import { machineRoutingMiddleware } from './middleware/machineRouting.js';
 import { PROTOCOL_VERSION, ClientMessageTypes, ServerMessageTypes, isCompatibleVersion } from '../shared/protocol.js';
 import { encryptionMiddleware, decryptionMiddleware, encryptWebSocketMessage, decryptWebSocketMessage } from './utils/encryption.js';
 import { userDb } from './database/db.js';
+import { 
+  checkConnectionLimit, 
+  registerConnection, 
+  unregisterConnection, 
+  checkMessageLimit, 
+  handleInvalidMessage 
+} from './middleware/smartRateLimit.js';
+import { connectionMonitor } from './utils/connectionMonitor.js';
 
 // File system watcher for projects folder
 let projectsWatcher = null;
@@ -147,15 +157,24 @@ const server = http.createServer(app);
 const wss = new WebSocketServer({ 
   server,
   verifyClient: (info) => {
-    console.log('WebSocket connection attempt to:', info.req.url);
+    const clientIP = info.req.socket.remoteAddress || info.req.headers['x-forwarded-for'];
+    console.log('WebSocket connection attempt from:', clientIP, 'to:', info.req.url);
+    
+    // Check connection limits before allowing connection
+    const connectionCheck = checkConnectionLimit(clientIP);
+    if (!connectionCheck.allowed) {
+      console.log('❌ Connection rejected:', connectionCheck.reason, 'for IP:', clientIP);
+      return false;
+    }
     
     // Extract token from query parameters or headers
     const url = new URL(info.req.url, 'http://localhost');
     const token = url.searchParams.get('token') || 
                   info.req.headers.authorization?.split(' ')[1];
     
-    // Store token for later async verification
+    // Store token and IP for later async verification
     info.req.wsToken = token;
+    info.req.clientIP = clientIP;
     return true; // Allow connection, we'll verify async in the connection handler
   }
 });
@@ -244,6 +263,9 @@ app.use('/api/machines', authenticateToken, machineRoutes);
 
 // Settings API Routes (protected)
 app.use('/api/settings', authenticateToken, settingsRoutes);
+
+// Security monitoring routes (admin only)
+app.use('/api/security', authenticateToken, securityRoutes);
 
 // Static files served after API routes
 app.use(express.static(path.join(__dirname, '../dist')));
@@ -519,7 +541,10 @@ app.get('/api/projects/:projectName/files', authenticateToken, async (req, res) 
 // WebSocket connection handler that routes based on URL path
 wss.on('connection', async (ws, request) => {
   const url = request.url;
-  console.log('🔗 Client connected to:', url);
+  const clientIP = request.clientIP;
+  const connectionId = crypto.randomUUID();
+  
+  console.log('🔗 Client connected:', connectionId, 'from:', clientIP, 'to:', url);
   
   // Parse URL to get pathname without query parameters
   const urlObj = new URL(url, 'http://localhost');
@@ -527,24 +552,51 @@ wss.on('connection', async (ws, request) => {
   
   // Perform async authentication using stored token
   const token = request.wsToken;
-  const user = await authenticateWebSocket(token);
+  const user = await authenticateWebSocket(token, clientIP);
   
   if (!user) {
-    console.log('❌ WebSocket authentication failed');
+    console.log('❌ WebSocket authentication failed for:', connectionId);
     ws.close(1008, 'Authentication failed');
     return;
   }
   
-  console.log('✅ WebSocket authenticated:', user.username, 'via', user.authType);
+  console.log('✅ WebSocket authenticated:', connectionId, user.username, 'via', user.authType);
+  
+  // Register connection for rate limiting and monitoring
+  registerConnection(connectionId, clientIP);
+  
+  // Register with connection monitor
+  const connectionType = pathname === '/shell' ? 'shell' : 
+                        pathname === '/ws' ? 'chat' : 
+                        pathname === '/machine' ? 'machine' : 'unknown';
+  
+  connectionMonitor.registerConnection(connectionId, ws, {
+    type: connectionType,
+    ip: clientIP,
+    userAgent: request.headers['user-agent'],
+    user: user,
+    machine: pathname === '/machine' ? 'self' : urlObj.searchParams.get('machineId')
+  });
+  
+  // Add cleanup handler
+  ws.on('close', () => {
+    console.log('🔌 Client disconnected:', connectionId);
+    unregisterConnection(connectionId);
+  });
+  
+  // Add error handler for rate limiting
+  ws.on('error', (error) => {
+    console.error('❌ WebSocket error for:', connectionId, error);
+  });
   
   if (pathname === '/shell') {
     // Extract machineId from query parameters
     const machineId = urlObj.searchParams.get('machineId');
-    handleShellConnection(ws, user, machineId);
+    handleShellConnection(ws, user, machineId, connectionId);
   } else if (pathname === '/ws') {
-    handleChatConnection(ws, user);
+    handleChatConnection(ws, user, connectionId);
   } else if (pathname === '/machine') {
-    handleMachineConnection(ws, user);
+    handleMachineConnection(ws, user, connectionId);
   } else {
     console.log('❌ Unknown WebSocket path:', pathname);
     ws.close();
@@ -552,7 +604,7 @@ wss.on('connection', async (ws, request) => {
 });
 
 // Handle chat WebSocket connections
-function handleChatConnection(ws, user) {
+function handleChatConnection(ws, user, connectionId) {
   console.log('💬 Chat WebSocket connected for user:', user?.username || 'unknown');
   
   // Add to connected clients for project updates
@@ -566,6 +618,24 @@ function handleChatConnection(ws, user) {
   ws.on('message', async (message) => {
     try {
       const data = JSON.parse(message);
+      
+      // Check rate limits for this message
+      const messageSize = Buffer.byteLength(message, 'utf8');
+      const rateLimitCheck = checkMessageLimit(connectionId, data.type, messageSize);
+      
+      if (!rateLimitCheck.allowed) {
+        console.log('⚠️ Rate limit exceeded for:', connectionId, data.type, rateLimitCheck);
+        ws.send(JSON.stringify({
+          type: 'rate_limit_exceeded',
+          category: rateLimitCheck.category,
+          resetTime: rateLimitCheck.resetTime,
+          message: 'Too many requests. Please slow down.'
+        }));
+        return;
+      }
+      
+      // Track message for monitoring
+      connectionMonitor.handleMessage(connectionId, messageSize, data.type);
       
       if (data.type === 'claude-command') {
         console.log('💬 User message:', data.command || '[Continue/Resume]');
@@ -609,9 +679,18 @@ function handleChatConnection(ws, user) {
       }
     } catch (error) {
       console.error('❌ Chat WebSocket error:', error.message);
+      
+      // Handle invalid message for abuse detection
+      const invalidCheck = handleInvalidMessage(connectionId, error);
+      if (invalidCheck.shouldDisconnect) {
+        console.log('🚫 Disconnecting connection due to invalid message abuse:', connectionId);
+        ws.close(1008, 'Invalid message abuse detected');
+        return;
+      }
+      
       ws.send(JSON.stringify({
         type: 'error',
-        error: error.message
+        error: 'Invalid message format'
       }));
     }
   });
@@ -628,7 +707,7 @@ function handleChatConnection(ws, user) {
 }
 
 // Handle shell WebSocket connections
-function handleShellConnection(ws, user, machineId) {
+function handleShellConnection(ws, user, machineId, connectionId) {
   console.log('🐚 Shell client connected', machineId ? `for machine: ${machineId}` : '(local)');
   let shellProcess = null;
   let isRemoteShell = false;
@@ -638,6 +717,22 @@ function handleShellConnection(ws, user, machineId) {
     try {
       const data = JSON.parse(message);
       console.log('📨 Shell message received:', data.type);
+      
+      // Check rate limits for shell messages
+      const messageSize = Buffer.byteLength(message, 'utf8');
+      const rateLimitCheck = checkMessageLimit(connectionId, data.type, messageSize);
+      
+      if (!rateLimitCheck.allowed) {
+        console.log('⚠️ Shell rate limit exceeded for:', connectionId, data.type);
+        ws.send(JSON.stringify({
+          type: 'output',
+          data: '\r\n⚠️ Rate limit exceeded. Please slow down.\r\n'
+        }));
+        return;
+      }
+      
+      // Track message for monitoring
+      connectionMonitor.handleMessage(connectionId, messageSize, data.type);
       
       if (data.type === 'init') {
         // Initialize shell with project path and session info
@@ -842,10 +937,19 @@ function handleShellConnection(ws, user, machineId) {
       }
     } catch (error) {
       console.error('❌ Shell WebSocket error:', error.message);
+      
+      // Handle invalid message for abuse detection
+      const invalidCheck = handleInvalidMessage(connectionId, error);
+      if (invalidCheck.shouldDisconnect) {
+        console.log('🚫 Disconnecting shell connection due to invalid message abuse:', connectionId);
+        ws.close(1008, 'Invalid message abuse detected');
+        return;
+      }
+      
       if (ws.readyState === ws.OPEN) {
         ws.send(JSON.stringify({
           type: 'output',
-          data: `\r\n\x1b[31mError: ${error.message}\x1b[0m\r\n`
+          data: `\r\n\x1b[31mError: Invalid message\x1b[0m\r\n`
         }));
       }
     }
@@ -878,7 +982,7 @@ function handleShellConnection(ws, user, machineId) {
 }
 
 // Handle machine client connections
-function handleMachineConnection(ws, user) {
+function handleMachineConnection(ws, user, connectionId) {
   console.log('🤖 Machine client connection attempt');
   let machineId = null;
   let encryptionKey = null;
@@ -898,6 +1002,23 @@ function handleMachineConnection(ws, user) {
       // Decrypt incoming message
       const data = decryptWebSocketMessage(message, encryptionKey);
       console.log('📨 Machine message received:', data.type);
+      
+      // Check rate limits for machine messages
+      const messageSize = Buffer.byteLength(message, 'utf8');
+      const rateLimitCheck = checkMessageLimit(connectionId, data.type, messageSize);
+      
+      if (!rateLimitCheck.allowed) {
+        console.log('⚠️ Machine rate limit exceeded for:', connectionId, data.type);
+        sendEncrypted({
+          type: 'rate_limit_exceeded',
+          category: rateLimitCheck.category,
+          resetTime: rateLimitCheck.resetTime
+        });
+        return;
+      }
+      
+      // Track message for monitoring
+      connectionMonitor.handleMessage(connectionId, messageSize, data.type);
       
       // Check protocol version
       if (data.protocol_version && !isCompatibleVersion(data.protocol_version)) {
@@ -1063,9 +1184,18 @@ function handleMachineConnection(ws, user) {
       }
     } catch (error) {
       console.error('❌ Machine WebSocket error:', error.message);
+      
+      // Handle invalid message for abuse detection
+      const invalidCheck = handleInvalidMessage(connectionId, error);
+      if (invalidCheck.shouldDisconnect) {
+        console.log('🚫 Disconnecting machine connection due to invalid message abuse:', connectionId);
+        ws.close(1008, 'Invalid message abuse detected');
+        return;
+      }
+      
       sendEncrypted({
         type: 'error',
-        error: error.message
+        error: 'Invalid message format'
       });
     }
   });
