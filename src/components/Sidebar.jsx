@@ -55,7 +55,8 @@ function Sidebar({
   machines,
   selectedMachine,
   onMachineSelect = () => {},
-  onMachineRemove = () => {}
+  onMachineRemove = () => {},
+  waitingSessions = {}
 }) {
   try {
     // Debug logging
@@ -89,6 +90,20 @@ function Sidebar({
   const [editingSessionName, setEditingSessionName] = useState('');
   const [generatingSummary, setGeneratingSummary] = useState({});
   const [searchFilter, setSearchFilter] = useState('');
+
+  // Helper function to check if a project has active Claude sessions
+  const getProjectClaudeStatus = (project) => {
+    // Check if this project has any waiting Claude sessions across all machines
+    for (const machineId in waitingSessions) {
+      const sessions = waitingSessions[machineId];
+      if (sessions && sessions > 0) {
+        // For now, we'll show indicator for any project if there are any waiting sessions on any machine
+        // TODO: In future, we could track which specific projects have active sessions
+        return 'waiting';
+      }
+    }
+    return null;
+  };
 
   
   // Starred projects state - persisted in localStorage
@@ -502,6 +517,7 @@ function Sidebar({
             selectedMachine={selectedMachine}
             onMachineSelect={onMachineSelect}
             onMachineRemove={onMachineRemove}
+            waitingSessions={waitingSessions}
             className="w-full"
           />
         </div>
@@ -759,9 +775,14 @@ function Sidebar({
                                 />
                               ) : (
                                 <>
-                                  <h3 className="text-sm font-medium text-foreground truncate">
-                                    {project.displayName}
-                                  </h3>
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="text-sm font-medium text-foreground truncate">
+                                      {project.displayName}
+                                    </h3>
+                                    {getProjectClaudeStatus(project) === 'waiting' && (
+                                      <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" title="Claude session waiting" />
+                                    )}
+                                  </div>
                                   <p className="text-xs text-muted-foreground">
                                     {(() => {
                                       const sessionCount = getAllSessions(project).length;
@@ -905,8 +926,13 @@ function Sidebar({
                             </div>
                           ) : (
                             <div>
-                              <div className="text-sm font-semibold truncate text-foreground" title={project.displayName}>
-                                {project.displayName}
+                              <div className="flex items-center gap-2">
+                                <div className="text-sm font-semibold truncate text-foreground" title={project.displayName}>
+                                  {project.displayName}
+                                </div>
+                                {getProjectClaudeStatus(project) === 'waiting' && (
+                                  <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" title="Claude session waiting" />
+                                )}
                               </div>
                               <div className="text-xs text-muted-foreground">
                                 {(() => {

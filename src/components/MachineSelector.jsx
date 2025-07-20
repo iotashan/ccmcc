@@ -6,6 +6,7 @@ const MachineSelector = ({
   selectedMachine = 'local', 
   onMachineSelect, 
   onMachineRemove,
+  waitingSessions = {},
   className = '' 
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -74,11 +75,14 @@ const MachineSelector = ({
     return `${diffDays}d ago`;
   };
 
+  // Calculate total waiting sessions
+  const totalWaitingSessions = Object.values(waitingSessions).reduce((sum, count) => sum + count, 0);
+
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors w-full text-left border border-gray-600"
+        className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors w-full text-left border border-gray-600 relative"
       >
         <div className="flex items-center gap-2 flex-1">
           {currentMachine.status === 'online' ? (
@@ -91,47 +95,62 @@ const MachineSelector = ({
           </span>
           {getStatusIcon(currentMachine.status)}
         </div>
-        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <div className="flex items-center gap-2">
+          {totalWaitingSessions > 0 && (
+            <span className="bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5 min-w-[20px] text-center">
+              {totalWaitingSessions}
+            </span>
+          )}
+          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        </div>
       </button>
 
       {isOpen && (
         <div className="absolute z-50 mt-2 w-full bg-gray-800 border border-gray-600 rounded-lg shadow-lg max-h-64 overflow-y-auto">
-          {allMachines.map((machine) => (
-            <div
-              key={machine.id}
-              className={`flex items-center gap-2 px-3 py-2 hover:bg-gray-700 cursor-pointer transition-colors ${
-                machine.id === selectedMachine ? 'bg-gray-700' : ''
-              }`}
-              onClick={() => handleSelect(machine.id)}
-            >
-              <div className="flex items-center gap-2 flex-1">
-                {machine.status === 'online' ? (
-                  <Monitor className="w-4 h-4 text-gray-400" />
-                ) : (
-                  <MonitorOff className="w-4 h-4 text-gray-400" />
-                )}
-                <div className="flex-1">
-                  <div className="text-sm text-gray-300">{machine.name}</div>
-                  {!machine.isLocal && machine.status === 'offline' && (
-                    <div className="text-xs text-gray-500">
-                      Last seen: {formatLastSeen(machine.lastSeen)}
-                    </div>
+          {allMachines.map((machine) => {
+            const machineWaitingCount = waitingSessions[machine.id] || 0;
+            return (
+              <div
+                key={machine.id}
+                className={`flex items-center gap-2 px-3 py-2 hover:bg-gray-700 cursor-pointer transition-colors ${
+                  machine.id === selectedMachine ? 'bg-gray-700' : ''
+                }`}
+                onClick={() => handleSelect(machine.id)}
+              >
+                <div className="flex items-center gap-2 flex-1">
+                  {machine.status === 'online' ? (
+                    <Monitor className="w-4 h-4 text-gray-400" />
+                  ) : (
+                    <MonitorOff className="w-4 h-4 text-gray-400" />
+                  )}
+                  <div className="flex-1">
+                    <div className="text-sm text-gray-300">{machine.name}</div>
+                    {!machine.isLocal && machine.status === 'offline' && (
+                      <div className="text-xs text-gray-500">
+                        Last seen: {formatLastSeen(machine.lastSeen)}
+                      </div>
+                    )}
+                  </div>
+                  {getStatusIcon(machine.status)}
+                  {machineWaitingCount > 0 && (
+                    <span className="bg-yellow-500 text-gray-900 text-xs font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
+                      {machineWaitingCount}
+                    </span>
                   )}
                 </div>
-                {getStatusIcon(machine.status)}
+                
+                {!machine.isLocal && machine.status === 'offline' && (
+                  <button
+                    onClick={(e) => handleRemove(e, machine.id)}
+                    className="p-1 hover:bg-gray-600 rounded transition-colors"
+                    title="Remove machine"
+                  >
+                    <X className="w-4 h-4 text-gray-400" />
+                  </button>
+                )}
               </div>
-              
-              {!machine.isLocal && machine.status === 'offline' && (
-                <button
-                  onClick={(e) => handleRemove(e, machine.id)}
-                  className="p-1 hover:bg-gray-600 rounded transition-colors"
-                  title="Remove machine"
-                >
-                  <X className="w-4 h-4 text-gray-400" />
-                </button>
-              )}
-            </div>
-          ))}
+            );
+          })}
           
           {machines.length === 0 && (
             <div className="px-3 py-4 text-center">

@@ -234,6 +234,21 @@ class MachineManager {
     }
   }
 
+  // Broadcast Claude session updates to all UI clients
+  broadcastClaudeSessionUpdate(userId, updateData) {
+    const message = JSON.stringify({
+      type: 'claude_session_update',
+      ...updateData
+    });
+
+    // Send to all UI clients for this user
+    for (const [ws, clientUserId] of this.userConnections) {
+      if (clientUserId === userId && ws.readyState === 1) {
+        ws.send(message);
+      }
+    }
+  }
+
   // Get stats about connected machines
   getStats() {
     const stats = {

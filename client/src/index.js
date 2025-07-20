@@ -23,7 +23,7 @@ logger.info(`Capabilities: ${finalConfig.capabilities.join(', ')}`);
 const connection = new MachineConnection(finalConfig, logger);
 
 // Create handlers
-const claudeHandler = new ClaudeHandler(connection, logger);
+const claudeHandler = new ClaudeHandler(connection, logger, finalConfig);
 const projectsHandler = new ProjectsHandler(connection, logger);
 const apiHandler = new ApiHandler(connection, logger);
 const shellHandler = new ShellHandler(connection, logger);

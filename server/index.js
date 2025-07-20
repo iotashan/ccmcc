@@ -46,7 +46,7 @@ import settingsRoutes from './routes/settings.js';
 import { initializeDatabase, machineDb } from './database/db.js';
 import { validateApiKey, authenticateToken, authenticateWebSocket } from './middleware/auth.js';
 import { machineManager } from './machines/MachineManager.js';
-import { loadTokensIntoCache, createApiToken, revokeApiToken, getUserApiTokens } from './utils/apiTokens.js';
+import { loadTokensIntoCache, createApiToken, revokeApiToken, getUserApiTokens, validateApiToken } from './utils/apiTokens.js';
 import { machineRoutingMiddleware } from './middleware/machineRouting.js';
 import { PROTOCOL_VERSION, ClientMessageTypes, ServerMessageTypes, isCompatibleVersion } from '../shared/protocol.js';
 import { encryptionMiddleware, decryptionMiddleware, encryptWebSocketMessage, decryptWebSocketMessage } from './utils/encryption.js';
@@ -206,6 +206,114 @@ app.delete('/api/tokens/:tokenId', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error revoking API token:', error);
     res.status(500).json({ error: 'Failed to revoke API token' });
+  }
+});
+
+// Claude hooks endpoint (for hook scripts to report session status)
+app.post('/api/hooks/session', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const token = authHeader.substring(7);
+    const { event, machineId, projectPath, sessionId, metadata } = req.body;
+
+    // Validate required fields
+    if (!event || !machineId || !sessionId) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Store session state
+    if (!global.claudeSessions) {
+      global.claudeSessions = new Map();
+    }
+
+    const sessionKey = `${machineId}:${sessionId}`;
+    let sessionData = global.claudeSessions.get(sessionKey) || {
+      machineId,
+      projectPath,
+      sessionId,
+      status: 'active',
+      startTime: new Date().toISOString(),
+      lastUpdate: new Date().toISOString()
+    };
+
+    // Update session based on event type
+    switch (event) {
+      case 'start':
+        sessionData.status = 'active';
+        sessionData.startTime = new Date().toISOString();
+        break;
+      
+      case 'tool_pending':
+        sessionData.status = metadata?.requiresConfirmation ? 'waiting_tool_confirmation' : 'active';
+        sessionData.currentTool = metadata?.toolName;
+        break;
+      
+      case 'tool_complete':
+        sessionData.status = 'active';
+        sessionData.currentTool = null;
+        break;
+      
+      case 'notification':
+        if (metadata?.notificationType === 'error') {
+          sessionData.status = 'error';
+          sessionData.errorMessage = metadata?.message;
+        } else if (metadata?.message?.includes('waiting')) {
+          sessionData.status = 'waiting_user_input';
+        }
+        break;
+      
+      case 'end':
+        sessionData.status = 'completed';
+        sessionData.endTime = new Date().toISOString();
+        sessionData.duration = metadata?.duration;
+        break;
+    }
+
+    sessionData.lastUpdate = new Date().toISOString();
+    global.claudeSessions.set(sessionKey, sessionData);
+
+    // Calculate waiting sessions per machine
+    const waitingSessions = {};
+    for (const [key, session] of global.claudeSessions.entries()) {
+      if (session.status.startsWith('waiting')) {
+        waitingSessions[session.machineId] = (waitingSessions[session.machineId] || 0) + 1;
+      }
+    }
+
+    // Broadcast update to WebSocket clients
+    const updateMessage = {
+      type: ClientMessageTypes.CLAUDE_SESSION_UPDATE,
+      sessions: {},
+      waitingSessions
+    };
+
+    // Group sessions by machine and project
+    for (const [key, session] of global.claudeSessions.entries()) {
+      if (!updateMessage.sessions[session.machineId]) {
+        updateMessage.sessions[session.machineId] = {};
+      }
+      updateMessage.sessions[session.machineId][session.projectPath] = session;
+    }
+
+    // Get user ID from token to broadcast to correct UI clients
+    try {
+      const tokenData = await validateApiToken(token);
+      if (tokenData && tokenData.user_id) {
+        // Broadcast update to all UI clients for this user
+        machineManager.broadcastClaudeSessionUpdate(tokenData.user_id, updateMessage);
+      }
+    } catch (tokenError) {
+      console.error('Error validating token for broadcast:', tokenError);
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Hook endpoint error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
