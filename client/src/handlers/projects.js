@@ -62,6 +62,7 @@ export class ProjectsHandler {
               name: projectName,
               displayName,
               path: projectPath,
+              fullPath: projectPath,
               lastModified: stats.mtime,
               created: stats.birthtime
             });

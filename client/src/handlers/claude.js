@@ -22,34 +22,57 @@ export class ClaudeHandler {
       }
       
       if (command && command.trim()) {
-        args.push(...command.split(' '));
+        // Add command with --print flag like the server does
+        args.push('--print', command);
+      }
+      
+      // Add output format and model like the server does
+      args.push('--output-format', 'stream-json', '--verbose');
+      
+      if (!options?.sessionId) {
+        args.push('--model', 'sonnet');
       }
       
       // Change to project directory if specified
       const cwd = options?.projectPath || process.cwd();
       
+      this.logger.info(`Spawning Claude with args: ${JSON.stringify(args)}`);
+      this.logger.info(`Working directory: ${cwd}`);
+      
       // Spawn Claude process
-      const claudeProcess = spawn('claude-code', args, {
-        cwd,
-        env: process.env,
-        shell: true
-      });
+      let claudeProcess;
+      try {
+        // Try to use the full path to claude binary
+        const claudePath = process.env.HOME + '/.claude/local/claude';
+        claudeProcess = spawn(claudePath, args, {
+          cwd,
+          env: process.env,
+          shell: false // Use false since we're using full path
+        });
+        this.logger.info('Claude process spawned successfully');
+      } catch (spawnError) {
+        this.logger.error('Failed to spawn Claude process:', spawnError);
+        throw spawnError;
+      }
       
       // Store process reference
       this.activeProcesses.set(request_id, claudeProcess);
       
       // Handle stdout
       claudeProcess.stdout.on('data', (data) => {
+        const output = data.toString();
+        this.logger.info('Claude stdout:', output);
         this.connection.send({
           type: ClientMessageTypes.CLAUDE_RESPONSE,
           request_id,
-          data: data.toString(),
+          data: output,
           stream: 'stdout'
         });
       });
       
       // Handle stderr
       claudeProcess.stderr.on('data', (data) => {
+        this.logger.error('Claude stderr:', data.toString());
         this.connection.send({
           type: ClientMessageTypes.CLAUDE_RESPONSE,
           request_id,

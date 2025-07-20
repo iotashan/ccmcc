@@ -887,18 +887,55 @@ function handleMachineConnection(ws, user) {
           break;
           
         case ClientMessageTypes.CLAUDE_RESPONSE:
-        case ClientMessageTypes.CLAUDE_ERROR:
-        case ClientMessageTypes.CLAUDE_COMPLETE:
-          // Forward Claude responses to UI clients
+          // Forward Claude responses to UI clients with proper format
           if (machineId && data.request_id) {
-            // Find the UI client that made this request
-            // For now, broadcast to all UI clients for this user
+            // Translate to UI format
+            const uiMessage = {
+              type: 'claude-response',
+              data: {
+                type: 'text',
+                text: data.data,
+                session_id: data.request_id // Using request_id as session_id for now
+              }
+            };
+            
+            // Broadcast to all UI clients for this user
             for (const [clientWs, clientUserId] of machineManager.userConnections) {
               if (clientUserId === user.id && clientWs.readyState === 1) {
-                clientWs.send(JSON.stringify({
-                  ...data,
-                  machine_id: machineId
-                }));
+                clientWs.send(JSON.stringify(uiMessage));
+              }
+            }
+          }
+          break;
+          
+        case ClientMessageTypes.CLAUDE_ERROR:
+          // Forward Claude errors to UI clients
+          if (machineId) {
+            const errorMessage = {
+              type: 'claude-error',
+              error: data.error || data.data || 'Unknown error'
+            };
+            
+            for (const [clientWs, clientUserId] of machineManager.userConnections) {
+              if (clientUserId === user.id && clientWs.readyState === 1) {
+                clientWs.send(JSON.stringify(errorMessage));
+              }
+            }
+          }
+          break;
+          
+        case ClientMessageTypes.CLAUDE_COMPLETE:
+          // Forward Claude completion to UI clients
+          if (machineId) {
+            const completeMessage = {
+              type: 'claude-complete',
+              exitCode: data.exit_code || 0,
+              isNewSession: false
+            };
+            
+            for (const [clientWs, clientUserId] of machineManager.userConnections) {
+              if (clientUserId === user.id && clientWs.readyState === 1) {
+                clientWs.send(JSON.stringify(completeMessage));
               }
             }
           }

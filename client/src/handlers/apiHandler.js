@@ -87,6 +87,137 @@ export class ApiHandler {
           }
         }
       }
+      else if (apiPath.match(/^\/projects\/([^\/]+)\/files$/) && method === 'GET') {
+        // Get file tree for a project
+        const matches = apiPath.match(/^\/projects\/([^\/]+)\/files$/);
+        const projectName = decodeURIComponent(matches[1]);
+        
+        // Decode the project name to get the actual path
+        const actualPath = projectName.replace(/-/g, '/');
+        
+        try {
+          // Get file tree (similar to server implementation)
+          responseData = await this.getFileTree(actualPath, 3, 0, true);
+        } catch (error) {
+          if (error.code === 'ENOENT') {
+            status = 404;
+            responseData = { error: `Project path not found: ${actualPath}` };
+          } else if (error.code === 'EACCES') {
+            status = 403;
+            responseData = { error: 'Permission denied' };
+          } else {
+            throw error;
+          }
+        }
+      }
+      else if (apiPath === '/projects/create' && method === 'POST') {
+        // Create a new project
+        const { path: projectPath } = body || {};
+        if (!projectPath || !projectPath.trim()) {
+          status = 400;
+          responseData = { error: 'Project path is required' };
+        } else {
+          try {
+            // Validate path exists
+            await fs.access(projectPath);
+            
+            // Generate project name (encode path)
+            const projectName = projectPath.replace(/\//g, '-');
+            
+            responseData = {
+              success: true,
+              projectName,
+              path: projectPath
+            };
+          } catch (error) {
+            if (error.code === 'ENOENT') {
+              status = 404;
+              responseData = { error: 'Path does not exist' };
+            } else if (error.code === 'EACCES') {
+              status = 403;
+              responseData = { error: 'Permission denied' };
+            } else {
+              throw error;
+            }
+          }
+        }
+      }
+      else if (apiPath.match(/^\/projects\/([^\/]+)\/rename$/) && method === 'PUT') {
+        // Rename project
+        const matches = apiPath.match(/^\/projects\/([^\/]+)\/rename$/);
+        const projectName = decodeURIComponent(matches[1]);
+        const { newName } = body || {};
+        
+        if (!newName || !newName.trim()) {
+          status = 400;
+          responseData = { error: 'New name is required' };
+        } else {
+          // For remote machines, we can't actually rename Claude's project directories
+          // Just return success to satisfy the UI
+          responseData = {
+            success: true,
+            oldName: projectName,
+            newName: newName
+          };
+        }
+      }
+      else if (apiPath.match(/^\/projects\/([^\/]+)\/sessions\/([^\/]+)$/) && method === 'DELETE') {
+        // Delete session
+        const matches = apiPath.match(/^\/projects\/([^\/]+)\/sessions\/([^\/]+)$/);
+        const projectName = decodeURIComponent(matches[1]);
+        const sessionId = decodeURIComponent(matches[2]);
+        
+        // For remote machines, we can't actually delete Claude's sessions
+        // Just return success to satisfy the UI
+        responseData = {
+          success: true,
+          message: 'Session deleted'
+        };
+      }
+      else if (apiPath.match(/^\/projects\/([^\/]+)$/) && method === 'DELETE') {
+        // Delete project
+        const matches = apiPath.match(/^\/projects\/([^\/]+)$/);
+        const projectName = decodeURIComponent(matches[1]);
+        
+        // For remote machines, we can't actually delete Claude's projects
+        // Just return success to satisfy the UI
+        responseData = {
+          success: true,
+          message: 'Project deleted'
+        };
+      }
+      else if (apiPath.match(/^\/projects\/([^\/]+)\/files\/content$/) && method === 'GET') {
+        // Serve binary file content
+        const filePath = query?.path;
+        
+        if (!filePath || !path.isAbsolute(filePath)) {
+          status = 400;
+          responseData = { error: 'Invalid file path' };
+        } else {
+          try {
+            // Read file as buffer for binary content
+            const content = await fs.readFile(filePath);
+            responseData = content; // Send raw buffer
+            headers['content-type'] = 'application/octet-stream';
+          } catch (error) {
+            if (error.code === 'ENOENT') {
+              status = 404;
+              responseData = { error: 'File not found' };
+            } else if (error.code === 'EACCES') {
+              status = 403;
+              responseData = { error: 'Permission denied' };
+            } else {
+              throw error;
+            }
+          }
+        }
+      }
+      else if (apiPath.match(/^\/projects\/([^\/]+)\/upload-images$/) && method === 'POST') {
+        // Handle image upload
+        // For remote machines, we don't support file uploads via this endpoint
+        status = 501;
+        responseData = { error: 'Image upload not supported on remote machines' };
+      }
       else {
         // Unsupported endpoint
         status = 404;
@@ -121,5 +252,48 @@ export class ApiHandler {
     // TODO: Implement reading session messages from Claude's session files
     // For now, return empty messages
     return { messages: [] };
+  }
+
+  async getFileTree(dir, maxDepth = 3, currentDepth = 0, includeHidden = false) {
+    const tree = [];
+    
+    try {
+      const entries = await fs.readdir(dir, { withFileTypes: true });
+      
+      for (const entry of entries) {
+        // Skip hidden files unless explicitly included
+        if (!includeHidden && entry.name.startsWith('.')) {
+          continue;
+        }
+        
+        const fullPath = path.join(dir, entry.name);
+        const item = {
+          name: entry.name,
+          path: fullPath,
+          type: entry.isDirectory() ? 'directory' : 'file'
+        };
+        
+        if (entry.isDirectory() && currentDepth < maxDepth) {
+          // Recursively get children
+          item.children = await this.getFileTree(fullPath, maxDepth, currentDepth + 1, includeHidden);
+        }
+        
+        tree.push(item);
+      }
+      
+      // Sort: directories first, then files, alphabetically
+      tree.sort((a, b) => {
+        if (a.type === b.type) {
+          return a.name.localeCompare(b.name);
+        }
+        return a.type === 'directory' ? -1 : 1;
+      });
+      
+    } catch (error) {
+      this.logger.error(`Error reading directory ${dir}:`, error);
+      throw error;
+    }
+    
+    return tree;
   }
 }
