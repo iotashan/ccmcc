@@ -178,6 +178,12 @@ function AppContent() {
       const latestMessage = messages[messages.length - 1];
       
       if (latestMessage.type === 'projects_updated') {
+        // Skip project updates from server when a remote machine is selected
+        // These updates are for the server's local projects only
+        if (selectedMachine && selectedMachine !== 'local') {
+          console.log('Ignoring server project update - remote machine selected:', selectedMachine);
+          return;
+        }
         
         // Session Protection Logic: Allow additions but prevent changes during active conversations
         // This allows new sessions/projects to appear in sidebar while protecting active chat messages

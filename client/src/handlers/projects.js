@@ -58,11 +58,24 @@ export class ProjectsHandler {
             // Get project stats
             const stats = await fs.stat(projectPath);
             
+            // Decode the actual project path from the encoded directory name
+            let actualProjectPath = projectPath;
+            // The project name is the encoded path - decode it
+            if (projectName.startsWith('-')) {
+              // Replace - with / to get the actual path
+              actualProjectPath = projectName.replace(/-/g, '/');
+              // Handle Windows paths (e.g., -C-Users-...)
+              if (actualProjectPath.match(/^\/[A-Z]\//) && process.platform === 'win32') {
+                // Convert /C/Users/... to C:/Users/...
+                actualProjectPath = actualProjectPath.substring(1, 2) + ':' + actualProjectPath.substring(2);
+              }
+            }
+            
             projects.push({
               name: projectName,
               displayName,
               path: projectPath,
-              fullPath: projectPath,
+              fullPath: actualProjectPath,
               lastModified: stats.mtime,
               created: stats.birthtime
             });

@@ -1,5 +1,6 @@
 import { ClientMessageTypes } from '../../../shared/protocol.js';
 import { ProjectsHandler } from './projects.js';
+import { GitHandler } from './git.js';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -8,6 +9,7 @@ export class ApiHandler {
     this.connection = connection;
     this.logger = logger;
     this.projectsHandler = new ProjectsHandler(connection, logger);
+    this.gitHandler = new GitHandler(connection, logger);
     
     // Register handler
     this.connection.on('request:api', this.handleApiRequest.bind(this));
@@ -217,6 +219,26 @@ export class ApiHandler {
         // For remote machines, we don't support file uploads via this endpoint
         status = 501;
         responseData = { error: 'Image upload not supported on remote machines' };
+      }
+      else if (apiPath.startsWith('/api/git/')) {
+        // Route git requests to GitHandler
+        // Create a message for the git handler
+        const gitMessage = {
+          request_id: requestId,
+          data: {
+            path: apiPath,
+            method: method,
+            query: query,
+            body: body,
+            headers: headers
+          }
+        };
+        
+        // Let the git handler process it
+        await this.gitHandler.handle(gitMessage);
+        
+        // GitHandler sends its own response, so we return early
+        return;
       }
       else {
         // Unsupported endpoint

@@ -42,12 +42,11 @@ export class ClaudeHandler {
       // Spawn Claude process
       let claudeProcess;
       try {
-        // Try to use the full path to claude binary
-        const claudePath = process.env.HOME + '/.claude/local/claude';
-        claudeProcess = spawn(claudePath, args, {
+        // Use 'claude' command from PATH
+        claudeProcess = spawn('claude', args, {
           cwd,
           env: process.env,
-          shell: false // Use false since we're using full path
+          shell: true // Use shell to find claude in PATH
         });
         this.logger.info('Claude process spawned successfully');
       } catch (spawnError) {
