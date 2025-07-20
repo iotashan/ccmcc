@@ -1315,6 +1315,326 @@ app.post('/api/projects/:projectName/upload-images', authenticateToken, async (r
   }
 });
 
+// Project MCP Configuration Routes
+// GET /api/projects/:projectId/mcp - Read .claude/ccui-mcp.json
+app.get('/api/projects/:projectId/mcp', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    console.log('📄 Reading project MCP config for:', projectId);
+    
+    // Get project by ID from projects cache/database
+    const projects = await getProjects();
+    const project = projects.find(p => p.id === projectId);
+    
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    const mcpConfigPath = path.join(project.fullPath, '.claude', 'ccui-mcp.json');
+    
+    try {
+      const configContent = await fsPromises.readFile(mcpConfigPath, 'utf-8');
+      const config = JSON.parse(configContent);
+      res.json(config);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        // File doesn't exist, return empty config
+        res.json({ mcpServers: [], strictMode: false });
+      } else {
+        throw error;
+      }
+    }
+  } catch (error) {
+    console.error('Error reading project MCP config:', error);
+    res.status(500).json({ error: 'Failed to read MCP configuration' });
+  }
+});
+
+// PUT /api/projects/:projectId/mcp - Write .claude/ccui-mcp.json
+app.put('/api/projects/:projectId/mcp', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { mcpServers, strictMode } = req.body;
+    console.log('💾 Writing project MCP config for:', projectId);
+    
+    // Get project by ID
+    const projects = await getProjects();
+    const project = projects.find(p => p.id === projectId);
+    
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    const claudeDir = path.join(project.fullPath, '.claude');
+    const mcpConfigPath = path.join(claudeDir, 'ccui-mcp.json');
+    
+    // Ensure .claude directory exists
+    try {
+      await fsPromises.mkdir(claudeDir, { recursive: true });
+    } catch (error) {
+      // Directory already exists, that's fine
+    }
+    
+    // Validate and prepare config
+    const config = {
+      mcpServers: mcpServers || [],
+      strictMode: strictMode || false,
+      lastUpdated: new Date().toISOString()
+    };
+    
+    // Write config file
+    await fsPromises.writeFile(mcpConfigPath, JSON.stringify(config, null, 2), 'utf-8');
+    
+    res.json({ success: true, message: 'MCP configuration saved' });
+  } catch (error) {
+    console.error('Error writing project MCP config:', error);
+    res.status(500).json({ error: 'Failed to save MCP configuration' });
+  }
+});
+
+// GET /api/projects/:projectId/mcp/discover - Discover available MCP servers for import
+app.get('/api/projects/:projectId/mcp/discover', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    console.log('🔍 Discovering user MCP servers for project:', projectId);
+    
+    // Get user-level MCP servers using Claude CLI
+    const { spawn } = await import('child_process');
+    
+    const process = spawn('claude', ['mcp', 'list'], {
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+    
+    let stdout = '';
+    let stderr = '';
+    
+    process.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+    
+    process.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+    
+    process.on('close', (code) => {
+      if (code === 0) {
+        const userServers = parseClaudeListOutput(stdout);
+        res.json({ userServers });
+      } else {
+        console.error('Claude CLI error:', stderr);
+        res.json({ userServers: [] }); // Return empty array on error
+      }
+    });
+    
+    process.on('error', (error) => {
+      console.error('Error running Claude CLI:', error);
+      res.json({ userServers: [] }); // Return empty array on error
+    });
+  } catch (error) {
+    console.error('Error discovering MCP servers:', error);
+    res.status(500).json({ error: 'Failed to discover MCP servers' });
+  }
+});
+
+// POST /api/projects/:projectId/mcp/import - Import selected MCP servers from user-level config
+app.post('/api/projects/:projectId/mcp/import', authenticateToken, async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { serverNames } = req.body;
+    console.log('📥 Importing MCP servers for project:', projectId, serverNames);
+    
+    if (!serverNames || !Array.isArray(serverNames)) {
+      return res.status(400).json({ error: 'Invalid server names' });
+    }
+    
+    // Get project by ID
+    const projects = await getProjects();
+    const project = projects.find(p => p.id === projectId);
+    
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Get details for each server from Claude CLI
+    const importedServers = [];
+    
+    for (const serverName of serverNames) {
+      try {
+        const serverDetails = await getClaudeServerDetails(serverName);
+        if (serverDetails) {
+          importedServers.push({
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+            name: serverName,
+            type: serverDetails.type || 'stdio',
+            config: serverDetails.config || {}
+          });
+        }
+      } catch (error) {
+        console.error(`Error getting details for server ${serverName}:`, error);
+      }
+    }
+    
+    // Read existing config
+    const claudeDir = path.join(project.fullPath, '.claude');
+    const mcpConfigPath = path.join(claudeDir, 'ccui-mcp.json');
+    
+    let existingConfig = { mcpServers: [], strictMode: false };
+    try {
+      const configContent = await fsPromises.readFile(mcpConfigPath, 'utf-8');
+      existingConfig = JSON.parse(configContent);
+    } catch (error) {
+      // File doesn't exist, use empty config
+    }
+    
+    // Merge imported servers with existing ones (avoid duplicates)
+    const existingNames = existingConfig.mcpServers.map(s => s.name);
+    const newServers = importedServers.filter(s => !existingNames.includes(s.name));
+    
+    const updatedConfig = {
+      ...existingConfig,
+      mcpServers: [...existingConfig.mcpServers, ...newServers],
+      lastUpdated: new Date().toISOString()
+    };
+    
+    // Ensure .claude directory exists
+    await fsPromises.mkdir(claudeDir, { recursive: true });
+    
+    // Write updated config
+    await fsPromises.writeFile(mcpConfigPath, JSON.stringify(updatedConfig, null, 2), 'utf-8');
+    
+    res.json({ 
+      success: true, 
+      imported: newServers.length,
+      skipped: importedServers.length - newServers.length,
+      message: `Imported ${newServers.length} MCP server(s)` 
+    });
+  } catch (error) {
+    console.error('Error importing MCP servers:', error);
+    res.status(500).json({ error: 'Failed to import MCP servers' });
+  }
+});
+
+// Helper function to get server details from Claude CLI
+async function getClaudeServerDetails(serverName) {
+  return new Promise((resolve, reject) => {
+    const { spawn } = require('child_process');
+    
+    const process = spawn('claude', ['mcp', 'get', serverName], {
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+    
+    let stdout = '';
+    let stderr = '';
+    
+    process.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+    
+    process.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+    
+    process.on('close', (code) => {
+      if (code === 0) {
+        const serverDetails = parseClaudeGetOutput(stdout);
+        resolve(serverDetails);
+      } else {
+        reject(new Error(`Claude CLI error: ${stderr}`));
+      }
+    });
+    
+    process.on('error', (error) => {
+      reject(error);
+    });
+  });
+}
+
+// Import the helper functions from mcp routes
+function parseClaudeListOutput(output) {
+  const servers = [];
+  const lines = output.split('\n').filter(line => line.trim());
+  
+  for (const line of lines) {
+    if (line.includes(':')) {
+      const colonIndex = line.indexOf(':');
+      const name = line.substring(0, colonIndex).trim();
+      const rest = line.substring(colonIndex + 1).trim();
+      
+      let type = 'stdio';
+      let command = rest;
+      let url = '';
+      
+      // Check if it has transport type in parentheses
+      const typeMatch = rest.match(/\((\w+)\)\s*$/);
+      if (typeMatch) {
+        type = typeMatch[1].toLowerCase();
+        command = rest.replace(/\s*\(\w+\)\s*$/, '').trim();
+      } else if (rest.startsWith('http://') || rest.startsWith('https://')) {
+        type = 'http';
+        url = rest;
+        command = '';
+      }
+      
+      if (name) {
+        servers.push({
+          name,
+          type,
+          command,
+          url
+        });
+      }
+    }
+  }
+  
+  return servers;
+}
+
+function parseClaudeGetOutput(output) {
+  try {
+    // Try to extract JSON if present
+    const jsonMatch = output.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    
+    // Parse as text
+    const server = { raw_output: output };
+    const lines = output.split('\n');
+    
+    for (const line of lines) {
+      if (line.includes('Name:')) {
+        server.name = line.split(':')[1]?.trim();
+      } else if (line.includes('Type:')) {
+        server.type = line.split(':')[1]?.trim();
+      } else if (line.includes('Command:')) {
+        server.command = line.split(':')[1]?.trim();
+      } else if (line.includes('URL:')) {
+        server.url = line.split(':')[1]?.trim();
+      }
+    }
+    
+    // Build config based on type
+    if (server.type === 'stdio' && server.command) {
+      const parts = server.command.split(' ');
+      server.config = {
+        command: parts[0],
+        args: parts.slice(1),
+        env: {}
+      };
+    } else if ((server.type === 'http' || server.type === 'sse') && server.url) {
+      server.config = {
+        url: server.url,
+        headers: {},
+        timeout: 30000
+      };
+    }
+    
+    return server;
+  } catch (error) {
+    return { raw_output: output, parse_error: error.message };
+  }
+}
+
 // Serve React app for all other routes
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../dist/index.html'));

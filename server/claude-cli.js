@@ -124,9 +124,90 @@ async function spawnClaude(command, options = {}, ws) {
         }
       }
       
-      console.log(`🔍 hasMcpServers result: ${hasMcpServers}`);
+      // Check for project-specific MCP config (.claude/ccui-mcp.json)
+      const projectMcpConfigPath = path.join(workingDir, '.claude', 'ccui-mcp.json');
+      let projectMcpConfig = null;
+      let hasProjectMcpServers = false;
       
-      if (hasMcpServers) {
+      console.log(`🔍 Checking for project MCP config: ${projectMcpConfigPath}`);
+      
+      if (fsSync.existsSync(projectMcpConfigPath)) {
+        try {
+          const projectConfigContent = fsSync.readFileSync(projectMcpConfigPath, 'utf8');
+          projectMcpConfig = JSON.parse(projectConfigContent);
+          
+          if (projectMcpConfig.mcpServers && projectMcpConfig.mcpServers.length > 0) {
+            console.log(`✅ Found ${projectMcpConfig.mcpServers.length} project-specific MCP servers in ccui-mcp.json`);
+            hasProjectMcpServers = true;
+            hasMcpServers = true;
+          }
+        } catch (e) {
+          console.log(`❌ Failed to parse project MCP config:`, e.message);
+        }
+      }
+      
+      console.log(`🔍 hasMcpServers result: ${hasMcpServers} (project: ${hasProjectMcpServers})`);
+      
+      // Priority: project-specific config > user-level config
+      if (hasProjectMcpServers) {
+        // Create a temporary config file that Claude CLI can use
+        try {
+          const tempConfigPath = path.join(workingDir, '.claude', 'temp-mcp-config.json');
+          
+          // Convert our format to Claude CLI format
+          const claudeConfigFormat = {
+            mcpServers: {}
+          };
+          
+          // Add project servers (converting from array to object format)
+          for (const server of projectMcpConfig.mcpServers) {
+            claudeConfigFormat.mcpServers[server.name] = server.config;
+          }
+          
+          // If not in strict mode, also add user-level servers
+          if (!projectMcpConfig.strictMode && fsSync.existsSync(claudeConfigPath)) {
+            try {
+              const claudeConfig = JSON.parse(fsSync.readFileSync(claudeConfigPath, 'utf8'));
+              if (claudeConfig.mcpServers) {
+                // Merge user servers (project servers take precedence)
+                Object.entries(claudeConfig.mcpServers).forEach(([name, config]) => {
+                  if (!claudeConfigFormat.mcpServers[name]) {
+                    claudeConfigFormat.mcpServers[name] = config;
+                  }
+                });
+                console.log('🔄 Merged user-level MCP servers (additive mode)');
+              }
+            } catch (e) {
+              console.log('⚠️ Failed to merge user-level MCP servers:', e.message);
+            }
+          } else if (projectMcpConfig.strictMode) {
+            console.log('🔒 Using strict mode - only project MCP servers');
+          }
+          
+          // Write temporary config file
+          fsSync.writeFileSync(tempConfigPath, JSON.stringify(claudeConfigFormat, null, 2));
+          
+          console.log(`📡 Adding project MCP config: ${tempConfigPath}`);
+          args.push('--mcp-config', tempConfigPath);
+          
+          // Clean up temp file after a delay (Claude will have read it by then)
+          setTimeout(() => {
+            try {
+              fsSync.unlinkSync(tempConfigPath);
+            } catch (e) {
+              // Ignore cleanup errors
+            }
+          }, 5000);
+          
+        } catch (e) {
+          console.log('❌ Failed to create temporary MCP config:', e.message);
+          // Fall back to user-level config if available
+          if (hasMcpServers && fsSync.existsSync(claudeConfigPath)) {
+            console.log(`📡 Falling back to user MCP config: ${claudeConfigPath}`);
+            args.push('--mcp-config', claudeConfigPath);
+          }
+        }
+      } else if (hasMcpServers) {
         // Use Claude config file if it has MCP servers
         let configPath = null;
         
@@ -149,7 +230,7 @@ async function spawnClaude(command, options = {}, ws) {
         }
         
         if (configPath) {
-          console.log(`📡 Adding MCP config: ${configPath}`);
+          console.log(`📡 Adding user MCP config: ${configPath}`);
           args.push('--mcp-config', configPath);
         } else {
           console.log('⚠️ MCP servers detected but no valid config file found');
