@@ -3,6 +3,15 @@ import { promisify } from 'util';
 import path from 'path';
 import { promises as fs } from 'fs';
 import { ClientMessageTypes } from '../../../shared/protocol.js';
+import {
+  getCurrentBranch,
+  validateGitRepository,
+  safeGitCommand,
+  gitErrorHandler,
+  isEmptyRepository,
+  getRemoteInfo,
+  parseGitStatus
+} from '../../../shared/utils/git.js';
 
 const execAsync = promisify(exec);
 
@@ -13,7 +22,7 @@ export class GitHandler {
   }
 
   async handle(message) {
-    const { request_id, data } = message;
+    const { requestId, data } = message;
     
     try {
       // Extract the API path and method
@@ -22,31 +31,34 @@ export class GitHandler {
       // Route the request based on path
       let response;
       
-      if (apiPath === '/api/git/status' && method === 'GET') {
+      // Handle both /git/ and /api/git/ paths
+      const normalizedPath = apiPath.replace(/^\/git\//, '/api/git/');
+      
+      if (normalizedPath === '/api/git/status' && method === 'GET') {
         response = await this.getStatus(query.project);
-      } else if (apiPath === '/api/git/diff' && method === 'GET') {
+      } else if (normalizedPath === '/api/git/diff' && method === 'GET') {
         response = await this.getDiff(query.project, query.file);
-      } else if (apiPath === '/api/git/commit' && method === 'POST') {
+      } else if (normalizedPath === '/api/git/commit' && method === 'POST') {
         response = await this.commit(body.project, body.message, body.files);
-      } else if (apiPath === '/api/git/branches' && method === 'GET') {
+      } else if (normalizedPath === '/api/git/branches' && method === 'GET') {
         response = await this.getBranches(query.project);
-      } else if (apiPath === '/api/git/checkout' && method === 'POST') {
+      } else if (normalizedPath === '/api/git/checkout' && method === 'POST') {
         response = await this.checkout(body.project, body.branch);
-      } else if (apiPath === '/api/git/create-branch' && method === 'POST') {
+      } else if (normalizedPath === '/api/git/create-branch' && method === 'POST') {
         response = await this.createBranch(body.project, body.branch);
-      } else if (apiPath === '/api/git/commits' && method === 'GET') {
+      } else if (normalizedPath === '/api/git/commits' && method === 'GET') {
         response = await this.getCommits(query.project, query.limit);
-      } else if (apiPath === '/api/git/commit-diff' && method === 'GET') {
+      } else if (normalizedPath === '/api/git/commit-diff' && method === 'GET') {
         response = await this.getCommitDiff(query.project, query.commit);
-      } else if (apiPath === '/api/git/remote-status' && method === 'GET') {
+      } else if (normalizedPath === '/api/git/remote-status' && method === 'GET') {
         response = await this.getRemoteStatus(query.project);
-      } else if (apiPath === '/api/git/fetch' && method === 'POST') {
+      } else if (normalizedPath === '/api/git/fetch' && method === 'POST') {
         response = await this.fetch(body.project);
-      } else if (apiPath === '/api/git/pull' && method === 'POST') {
+      } else if (normalizedPath === '/api/git/pull' && method === 'POST') {
         response = await this.pull(body.project);
-      } else if (apiPath === '/api/git/push' && method === 'POST') {
+      } else if (normalizedPath === '/api/git/push' && method === 'POST') {
         response = await this.push(body.project);
-      } else if (apiPath === '/api/git/publish' && method === 'POST') {
+      } else if (normalizedPath === '/api/git/publish' && method === 'POST') {
         response = await this.publish(body.project, body.branch);
       } else if (apiPath === '/api/git/discard' && method === 'POST') {
         response = await this.discard(body.project, body.file);
@@ -64,7 +76,7 @@ export class GitHandler {
       // Send response back
       this.connection.send({
         type: ClientMessageTypes.API_RESPONSE,
-        request_id,
+        requestId: requestId,
         status: response.status || 200,
         headers: response.headers || { 'content-type': 'application/json' },
         data: response.data
@@ -75,7 +87,7 @@ export class GitHandler {
       
       this.connection.send({
         type: ClientMessageTypes.API_RESPONSE,
-        request_id,
+        requestId: requestId,
         status: 500,
         headers: { 'content-type': 'application/json' },
         data: { error: error.message }
@@ -99,29 +111,6 @@ export class GitHandler {
     return projectName;
   }
 
-  // Validate git repository
-  async validateGitRepository(projectPath) {
-    try {
-      await fs.access(projectPath);
-    } catch {
-      throw new Error(`Project path not found: ${projectPath}`);
-    }
-
-    try {
-      const { stdout: gitRoot } = await execAsync('git rev-parse --show-toplevel', { cwd: projectPath });
-      const normalizedGitRoot = path.resolve(gitRoot.trim());
-      const normalizedProjectPath = path.resolve(projectPath);
-      
-      if (normalizedGitRoot !== normalizedProjectPath) {
-        throw new Error(`Project directory is not a git repository. This directory is inside a git repository at ${normalizedGitRoot}, but git operations should be run from the repository root.`);
-      }
-    } catch (error) {
-      if (error.message.includes('Project directory is not a git repository')) {
-        throw error;
-      }
-      throw new Error('Not a git repository. This directory does not contain a .git folder. Initialize a git repository with "git init" to use source control features.');
-    }
-  }
 
   async getStatus(project) {
     if (!project) {
@@ -132,36 +121,16 @@ export class GitHandler {
       const projectPath = this.getActualProjectPath(project);
       this.logger.info(`Git status for project: ${project} -> path: ${projectPath}`);
       
-      await this.validateGitRepository(projectPath);
-
-      const { stdout: branch } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: projectPath });
+      // Use shared utilities
+      await validateGitRepository(projectPath, fs, execAsync);
+      const branch = await getCurrentBranch(projectPath, execAsync);
+      
       const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: projectPath });
-      
-      const modified = [];
-      const added = [];
-      const deleted = [];
-      const untracked = [];
-      
-      statusOutput.split('\n').forEach(line => {
-        if (!line.trim()) return;
-        
-        const status = line.substring(0, 2);
-        const file = line.substring(3);
-        
-        if (status === 'M ' || status === ' M' || status === 'MM') {
-          modified.push(file);
-        } else if (status === 'A ' || status === 'AM') {
-          added.push(file);
-        } else if (status === 'D ' || status === ' D') {
-          deleted.push(file);
-        } else if (status === '??') {
-          untracked.push(file);
-        }
-      });
+      const { modified, added, deleted, untracked } = parseGitStatus(statusOutput);
       
       return {
         data: {
-          branch: branch.trim(),
+          branch,
           modified,
           added,
           deleted,
@@ -170,15 +139,9 @@ export class GitHandler {
       };
     } catch (error) {
       this.logger.error('Git status error:', error);
+      const errorResponse = gitErrorHandler(error);
       return {
-        data: { 
-          error: error.message.includes('not a git repository') || error.message.includes('Project directory is not a git repository') 
-            ? error.message 
-            : 'Git operation failed',
-          details: error.message.includes('not a git repository') || error.message.includes('Project directory is not a git repository')
-            ? error.message
-            : `Failed to get git status: ${error.message}`
-        }
+        data: errorResponse
       };
     }
   }
@@ -190,7 +153,7 @@ export class GitHandler {
 
     try {
       const projectPath = this.getActualProjectPath(project);
-      await this.validateGitRepository(projectPath);
+      await validateGitRepository(projectPath, fs, execAsync);
       
       const { stdout: statusOutput } = await execAsync(`git status --porcelain "${file}"`, { cwd: projectPath });
       const isUntracked = statusOutput.startsWith('??');
@@ -225,7 +188,7 @@ export class GitHandler {
 
     try {
       const projectPath = this.getActualProjectPath(project);
-      await this.validateGitRepository(projectPath);
+      await validateGitRepository(projectPath, fs, execAsync);
       
       for (const file of files) {
         await execAsync(`git add "${file}"`, { cwd: projectPath });
@@ -247,7 +210,7 @@ export class GitHandler {
 
     try {
       const projectPath = this.getActualProjectPath(project);
-      await this.validateGitRepository(projectPath);
+      await validateGitRepository(projectPath, fs, execAsync);
       
       const { stdout } = await execAsync('git branch -a', { cwd: projectPath });
       
@@ -374,44 +337,25 @@ export class GitHandler {
 
     try {
       const projectPath = this.getActualProjectPath(project);
-      await this.validateGitRepository(projectPath);
+      await validateGitRepository(projectPath, fs, execAsync);
 
-      const { stdout: currentBranch } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: projectPath });
-      const branch = currentBranch.trim();
+      const branch = await getCurrentBranch(projectPath, execAsync);
+      const remoteInfo = await getRemoteInfo(projectPath, branch, execAsync);
 
-      let trackingBranch;
-      let remoteName;
-      try {
-        const { stdout } = await execAsync(`git rev-parse --abbrev-ref ${branch}@{upstream}`, { cwd: projectPath });
-        trackingBranch = stdout.trim();
-        remoteName = trackingBranch.split('/')[0];
-      } catch (error) {
-        let hasRemote = false;
-        let remoteName = null;
-        try {
-          const { stdout } = await execAsync('git remote', { cwd: projectPath });
-          const remotes = stdout.trim().split('\n').filter(r => r.trim());
-          if (remotes.length > 0) {
-            hasRemote = true;
-            remoteName = remotes.includes('origin') ? 'origin' : remotes[0];
-          }
-        } catch (remoteError) {
-          // No remotes configured
-        }
-        
+      if (!remoteInfo.hasUpstream) {
         return { 
           data: {
-            hasRemote,
+            hasRemote: remoteInfo.hasRemote,
             hasUpstream: false,
             branch,
-            remoteName,
+            remoteName: remoteInfo.remoteName,
             message: 'No remote tracking branch configured'
           }
         };
       }
 
       const { stdout: countOutput } = await execAsync(
-        `git rev-list --count --left-right ${trackingBranch}...HEAD`,
+        `git rev-list --count --left-right ${remoteInfo.trackingBranch}...HEAD`,
         { cwd: projectPath }
       );
       
@@ -422,8 +366,8 @@ export class GitHandler {
           hasRemote: true,
           hasUpstream: true,
           branch,
-          remoteBranch: trackingBranch,
-          remoteName,
+          remoteBranch: remoteInfo.trackingBranch,
+          remoteName: remoteInfo.remoteName,
           ahead: ahead || 0,
           behind: behind || 0,
           isUpToDate: ahead === 0 && behind === 0
@@ -442,18 +386,11 @@ export class GitHandler {
 
     try {
       const projectPath = this.getActualProjectPath(project);
-      await this.validateGitRepository(projectPath);
+      await validateGitRepository(projectPath, fs, execAsync);
 
-      const { stdout: currentBranch } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: projectPath });
-      const branch = currentBranch.trim();
-
-      let remoteName = 'origin';
-      try {
-        const { stdout } = await execAsync(`git rev-parse --abbrev-ref ${branch}@{upstream}`, { cwd: projectPath });
-        remoteName = stdout.trim().split('/')[0];
-      } catch (error) {
-        this.logger.info('No upstream configured, using origin as fallback');
-      }
+      const branch = await getCurrentBranch(projectPath, execAsync);
+      const remoteInfo = await getRemoteInfo(projectPath, branch, execAsync);
+      const remoteName = remoteInfo.remoteName || 'origin';
 
       const { stdout } = await execAsync(`git fetch ${remoteName}`, { cwd: projectPath });
       
@@ -481,20 +418,15 @@ export class GitHandler {
 
     try {
       const projectPath = this.getActualProjectPath(project);
-      await this.validateGitRepository(projectPath);
+      await validateGitRepository(projectPath, fs, execAsync);
 
-      const { stdout: currentBranch } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: projectPath });
-      const branch = currentBranch.trim();
-
-      let remoteName = 'origin';
+      const branch = await getCurrentBranch(projectPath, execAsync);
+      const remoteInfo = await getRemoteInfo(projectPath, branch, execAsync);
+      
+      let remoteName = remoteInfo.remoteName || 'origin';
       let remoteBranch = branch;
-      try {
-        const { stdout } = await execAsync(`git rev-parse --abbrev-ref ${branch}@{upstream}`, { cwd: projectPath });
-        const tracking = stdout.trim();
-        remoteName = tracking.split('/')[0];
-        remoteBranch = tracking.split('/').slice(1).join('/');
-      } catch (error) {
-        this.logger.info('No upstream configured, using origin/branch as fallback');
+      if (remoteInfo.trackingBranch) {
+        remoteBranch = remoteInfo.trackingBranch.split('/').slice(1).join('/');
       }
 
       const { stdout } = await execAsync(`git pull ${remoteName} ${remoteBranch}`, { cwd: projectPath });
@@ -547,20 +479,15 @@ export class GitHandler {
 
     try {
       const projectPath = this.getActualProjectPath(project);
-      await this.validateGitRepository(projectPath);
+      await validateGitRepository(projectPath, fs, execAsync);
 
-      const { stdout: currentBranch } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: projectPath });
-      const branch = currentBranch.trim();
-
-      let remoteName = 'origin';
+      const branch = await getCurrentBranch(projectPath, execAsync);
+      const remoteInfo = await getRemoteInfo(projectPath, branch, execAsync);
+      
+      let remoteName = remoteInfo.remoteName || 'origin';
       let remoteBranch = branch;
-      try {
-        const { stdout } = await execAsync(`git rev-parse --abbrev-ref ${branch}@{upstream}`, { cwd: projectPath });
-        const tracking = stdout.trim();
-        remoteName = tracking.split('/')[0];
-        remoteBranch = tracking.split('/').slice(1).join('/');
-      } catch (error) {
-        this.logger.info('No upstream configured, using origin/branch as fallback');
+      if (remoteInfo.trackingBranch) {
+        remoteBranch = remoteInfo.trackingBranch.split('/').slice(1).join('/');
       }
 
       const { stdout } = await execAsync(`git push ${remoteName} ${remoteBranch}`, { cwd: projectPath });
@@ -616,10 +543,9 @@ export class GitHandler {
 
     try {
       const projectPath = this.getActualProjectPath(project);
-      await this.validateGitRepository(projectPath);
+      await validateGitRepository(projectPath, fs, execAsync);
 
-      const { stdout: currentBranch } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: projectPath });
-      const currentBranchName = currentBranch.trim();
+      const currentBranchName = await getCurrentBranch(projectPath, execAsync);
       
       if (currentBranchName !== branch) {
         return { 
@@ -699,7 +625,7 @@ export class GitHandler {
 
     try {
       const projectPath = this.getActualProjectPath(project);
-      await this.validateGitRepository(projectPath);
+      await validateGitRepository(projectPath, fs, execAsync);
 
       const { stdout: statusOutput } = await execAsync(`git status --porcelain "${file}"`, { cwd: projectPath });
       
@@ -731,7 +657,7 @@ export class GitHandler {
 
     try {
       const projectPath = this.getActualProjectPath(project);
-      await this.validateGitRepository(projectPath);
+      await validateGitRepository(projectPath, fs, execAsync);
 
       const { stdout: statusOutput } = await execAsync(`git status --porcelain "${file}"`, { cwd: projectPath });
       

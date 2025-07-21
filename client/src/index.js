@@ -51,7 +51,7 @@ connection.on('request:sessions', async (message) => {
     
     connection.send({
       type: 'session_list',
-      request_id: message.request_id,
+      requestId: message.requestId,
       ...result
     });
   } catch (error) {

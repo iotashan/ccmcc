@@ -9,6 +9,7 @@ import { cn } from '../lib/utils';
 import ClaudeLogo from './ClaudeLogo';
 import MachineSelector from './MachineSelector';
 import { api } from '../utils/api';
+import { TEST_IDS } from '../utils/testIds';
 
 // Move formatTimeAgo outside component to avoid recreation on every render
 const formatTimeAgo = (dateString, currentTime) => {
@@ -479,7 +480,7 @@ function Sidebar({
   });
 
   return (
-    <div className="h-full flex flex-col bg-card md:select-none">
+    <div className="h-full flex flex-col bg-card md:select-none" data-testid={TEST_IDS.nav.sidebar}>
       {/* Header */}
       <div className="md:p-4 md:border-b md:border-border">
         {/* Desktop Header */}
@@ -673,6 +674,7 @@ function Sidebar({
               className="h-9 w-9 px-0 bg-primary hover:bg-primary/90 transition-all duration-200 shadow-sm hover:shadow-md"
               onClick={() => setShowNewProject(true)}
               title="Create new project (Ctrl+N)"
+              data-testid={TEST_IDS.nav.newProjectButton}
             >
               <FolderPlus className="w-4 h-4" />
             </Button>
@@ -681,7 +683,7 @@ function Sidebar({
       )}
       
       {/* Projects List */}
-      <ScrollArea className="flex-1 md:px-2 md:py-3 overflow-y-auto overscroll-contain">
+      <ScrollArea className="flex-1 md:px-2 md:py-3 overflow-y-auto overscroll-contain" data-testid={TEST_IDS.nav.projectList}>
         <div className="md:space-y-1 pb-safe-area-inset-bottom">
           {isLoading ? (
             <div className="text-center py-12 md:py-8 px-4">
@@ -723,7 +725,7 @@ function Sidebar({
               const isStarred = isProjectStarred(project.name);
               
               return (
-                <div key={project.name} className="md:space-y-1">
+                <div key={project.name} className="md:space-y-1" data-testid={TEST_IDS.nav.projectItem}>
                   {/* Project Header */}
                   <div className="group md:group">
                     {/* Mobile Project Item */}
@@ -1060,7 +1062,7 @@ function Sidebar({
                           const isActive = diffInMinutes < 10;
                           
                           return (
-                          <div key={session.id} className="group relative">
+                          <div key={session.id} className="group relative" data-testid={TEST_IDS.nav.sessionItem}>
                             {/* Active session indicator dot */}
                             {isActive && (
                               <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1">
@@ -1355,6 +1357,7 @@ function Sidebar({
           <button
             className="w-full h-14 bg-muted/50 hover:bg-muted/70 rounded-2xl flex items-center justify-start gap-4 px-4 active:scale-[0.98] transition-all duration-150"
             onClick={onShowSettings}
+            data-testid={TEST_IDS.nav.settingsButton}
           >
             <div className="w-10 h-10 rounded-2xl bg-background/80 flex items-center justify-center">
               <Settings className="w-5 h-5 text-muted-foreground" />
@@ -1370,6 +1373,7 @@ function Sidebar({
             variant="ghost"
             className="w-full justify-start gap-2 p-2 h-auto font-normal text-muted-foreground hover:text-foreground hover:bg-accent transition-colors duration-200"
             onClick={onShowSettings}
+            data-testid={TEST_IDS.nav.settingsButton}
           >
             <Settings className="w-3 h-3" />
             <span className="text-xs">Settings</span>

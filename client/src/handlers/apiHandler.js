@@ -3,6 +3,7 @@ import { ProjectsHandler } from './projects.js';
 import { GitHandler } from './git.js';
 import fs from 'fs/promises';
 import path from 'path';
+import { getFileTree as getSharedFileTree, handleFileError, fileExists } from '../../../shared/utils/files.js';
 
 export class ApiHandler {
   constructor(connection, logger) {
@@ -57,12 +58,13 @@ export class ApiHandler {
             const content = await fs.readFile(filePath, 'utf8');
             responseData = { content, path: filePath };
           } catch (error) {
+            const errorResponse = handleFileError(error);
             if (error.code === 'ENOENT') {
               status = 404;
-              responseData = { error: 'File not found' };
+              responseData = errorResponse;
             } else if (error.code === 'EACCES') {
               status = 403;
-              responseData = { error: 'Permission denied' };
+              responseData = errorResponse;
             } else {
               throw error;
             }
@@ -99,7 +101,12 @@ export class ApiHandler {
         
         try {
           // Get file tree (similar to server implementation)
-          responseData = await this.getFileTree(actualPath, 3, 0, true);
+          // Use shared file tree utility
+          responseData = await getSharedFileTree(actualPath, {
+            maxDepth: 3,
+            includeHidden: true,
+            maxFiles: 10000
+          });
         } catch (error) {
           if (error.code === 'ENOENT') {
             status = 404;
@@ -224,7 +231,7 @@ export class ApiHandler {
         // Route git requests to GitHandler
         // Create a message for the git handler
         const gitMessage = {
-          request_id: requestId,
+          requestId: requestId,
           data: {
             path: apiPath,
             method: method,
@@ -249,8 +256,8 @@ export class ApiHandler {
       // Send response back
       this.connection.send({
         type: ClientMessageTypes.API_RESPONSE,
-        requestId,
-        machine_id: this.connection.machineId,
+        requestId: requestId,
+        machineId: this.connection.machineId,
         status,
         headers: { 'content-type': 'application/json' },
         data: responseData
@@ -262,10 +269,11 @@ export class ApiHandler {
       // Send error response
       this.connection.send({
         type: ClientMessageTypes.API_RESPONSE,
-        requestId,
-        machine_id: this.connection.machineId,
+        requestId: requestId,
+        machineId: this.connection.machineId,
         status: 500,
-        error: error.message
+        error: error.message,
+        data: { error: error.message }
       });
     }
   }
@@ -276,7 +284,7 @@ export class ApiHandler {
     return { messages: [] };
   }
 
-  async getFileTree(dir, maxDepth = 3, currentDepth = 0, includeHidden = false) {
+  async getFileTreeLegacy(dir, maxDepth = 3, currentDepth = 0, includeHidden = false) {
     const tree = [];
     
     try {
@@ -297,7 +305,7 @@ export class ApiHandler {
         
         if (entry.isDirectory() && currentDepth < maxDepth) {
           // Recursively get children
-          item.children = await this.getFileTree(fullPath, maxDepth, currentDepth + 1, includeHidden);
+          item.children = await this.getFileTreeLegacy(fullPath, maxDepth, currentDepth + 1, includeHidden);
         }
         
         tree.push(item);

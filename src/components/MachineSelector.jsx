@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Monitor, MonitorOff, X, Plus } from 'lucide-react';
+import { TEST_IDS } from '../utils/testIds';
 
 const MachineSelector = ({ 
   machines = [], 
@@ -83,6 +84,7 @@ const MachineSelector = ({
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors w-full text-left border border-gray-600 relative"
+        data-testid={TEST_IDS.nav.machineSelector}
       >
         <div className="flex items-center gap-2 flex-1">
           {currentMachine.status === 'online' ? (
@@ -106,7 +108,7 @@ const MachineSelector = ({
       </button>
 
       {isOpen && (
-        <div className="absolute z-50 mt-2 w-full bg-gray-800 border border-gray-600 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+        <div className="absolute z-50 mt-2 w-full bg-gray-800 border border-gray-600 rounded-lg shadow-lg max-h-64 overflow-y-auto" data-testid={TEST_IDS.nav.machineDropdown}>
           {allMachines.map((machine) => {
             const machineWaitingCount = waitingSessions[machine.id] || 0;
             return (
@@ -116,6 +118,7 @@ const MachineSelector = ({
                   machine.id === selectedMachine ? 'bg-gray-700' : ''
                 }`}
                 onClick={() => handleSelect(machine.id)}
+                data-testid={TEST_IDS.nav.machineDropdownItem}
               >
                 <div className="flex items-center gap-2 flex-1">
                   {machine.status === 'online' ? (

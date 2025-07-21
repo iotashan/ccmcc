@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { MessageSquare } from 'lucide-react';
+import { TEST_IDS } from '../utils/testIds';
 
 const LoginForm = () => {
   const [username, setUsername] = useState('');
@@ -48,7 +49,7 @@ const LoginForm = () => {
           </div>
 
           {/* Login Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" data-testid={TEST_IDS.auth.loginForm}>
             <div>
               <label htmlFor="username" className="block text-sm font-medium text-foreground mb-1">
                 Username
@@ -62,6 +63,7 @@ const LoginForm = () => {
                 placeholder="Enter your username"
                 required
                 disabled={isLoading}
+                data-testid={TEST_IDS.auth.usernameInput}
               />
             </div>
 
@@ -78,11 +80,12 @@ const LoginForm = () => {
                 placeholder="Enter your password"
                 required
                 disabled={isLoading}
+                data-testid={TEST_IDS.auth.passwordInput}
               />
             </div>
 
             {error && (
-              <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-300 dark:border-red-800 rounded-md">
+              <div className="p-3 bg-red-100 dark:bg-red-900/20 border border-red-300 dark:border-red-800 rounded-md" data-testid={TEST_IDS.auth.errorMessage}>
                 <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
               </div>
             )}
@@ -91,6 +94,7 @@ const LoginForm = () => {
               type="submit"
               disabled={isLoading}
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-4 rounded-md transition-colors duration-200"
+              data-testid={TEST_IDS.auth.signInButton}
             >
               {isLoading ? 'Signing in...' : 'Sign In'}
             </button>

@@ -107,16 +107,16 @@ export const MachineStatus = {
 export function createMachineMessage(type, machineId, data = {}) {
   return {
     type,
-    machine_id: machineId,
+    machineId: machineId,
     timestamp: new Date().toISOString(),
-    protocol_version: PROTOCOL_VERSION,
+    protocolVersion: PROTOCOL_VERSION,
     ...data
   };
 }
 
 // Extract machine ID from message
 export function getMachineId(message) {
-  return message.machine_id || 'local';
+  return message.machineId || 'local';
 }
 
 // Check if message is from a specific machine

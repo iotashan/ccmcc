@@ -51,10 +51,10 @@ export class MachineConnection extends EventEmitter {
     this.send({
       type: ClientMessageTypes.MACHINE_REGISTER,
       name: this.config.clientName,
-      ip_address: this.config.clientName,
+      ipAddress: this.config.clientName,
       capabilities: this.config.capabilities,
-      auth_token: this.config.authToken,  // Use API token from config
-      protocol_version: PROTOCOL_VERSION
+      authToken: this.config.authToken,  // Use API token from config
+      protocolVersion: PROTOCOL_VERSION
     });
   }
 
@@ -131,7 +131,7 @@ export class MachineConnection extends EventEmitter {
   handleRegisterAck(message) {
     this.machineId = message.machine.id;
     // Don't override the API token with machine auth token
-    // this.authToken = message.machine.auth_token;
+    // this.authToken = message.machine.authToken;
     
     this.logger.info(`Registered as machine: ${message.machine.name} (${this.machineId})`);
     
@@ -150,7 +150,7 @@ export class MachineConnection extends EventEmitter {
       if (this.isConnected && this.machineId) {
         this.send({
           type: ClientMessageTypes.MACHINE_HEARTBEAT,
-          machine_id: this.machineId
+          machineId: this.machineId
         });
       }
     }, this.config.heartbeatInterval);

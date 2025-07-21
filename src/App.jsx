@@ -167,8 +167,8 @@ function AppContent() {
     const sessionUnchanged = 
       currentSelectedSession.id === updatedSelectedSession.id &&
       currentSelectedSession.title === updatedSelectedSession.title &&
-      currentSelectedSession.created_at === updatedSelectedSession.created_at &&
-      currentSelectedSession.updated_at === updatedSelectedSession.updated_at;
+      currentSelectedSession.createdAt === updatedSelectedSession.createdAt &&
+      currentSelectedSession.updatedAt === updatedSelectedSession.updatedAt;
 
     // This is considered additive if the selected session is unchanged
     // (new sessions may have been added elsewhere, but active session is protected)
@@ -291,19 +291,14 @@ function AppContent() {
 
   // Handle URL-based session loading
   useEffect(() => {
-    if (sessionId && projects.length > 0) {
-      // Only switch tabs on initial load, not on every project update
-      const shouldSwitchTab = !selectedSession || selectedSession.id !== sessionId;
+    if (sessionId && projects.length > 0 && (!selectedSession || selectedSession.id !== sessionId)) {
       // Find the session across all projects
       for (const project of projects) {
         const session = project.sessions?.find(s => s.id === sessionId);
         if (session) {
           setSelectedProject(project);
           setSelectedSession(session);
-          // Only switch to chat tab if we're loading a different session
-          if (shouldSwitchTab) {
-            setActiveTab('chat');
-          }
+          setActiveTab('chat');
           return;
         }
       }
@@ -312,7 +307,7 @@ function AppContent() {
       // Just navigate to it and it will be found when the sidebar refreshes
       // Don't redirect to home, let the session load naturally
     }
-  }, [sessionId, projects, navigate]);
+  }, [sessionId, projects]); // Remove navigate to avoid warnings, remove selectedSession to avoid loops
 
   const handleProjectSelect = (project) => {
     setSelectedProject(project);

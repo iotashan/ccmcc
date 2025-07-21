@@ -1,5 +1,6 @@
 import { db } from './db.js';
 import crypto from 'crypto';
+import { mapDbRowToJs } from './fieldMapping.js';
 
 // Machine database operations
 const machineDb = {
@@ -57,11 +58,13 @@ const machineDb = {
       ).get(machineId);
       
       if (row) {
-        row.capabilities = JSON.parse(row.capabilities || '[]');
-        row.metadata = JSON.parse(row.metadata || '{}');
+        const machine = mapDbRowToJs(row);
+        machine.capabilities = JSON.parse(machine.capabilities || '[]');
+        machine.metadata = JSON.parse(machine.metadata || '{}');
+        return machine;
       }
       
-      return row;
+      return null;
     } catch (err) {
       throw err;
     }
@@ -75,11 +78,13 @@ const machineDb = {
       ).get(name, userId);
       
       if (row) {
-        row.capabilities = JSON.parse(row.capabilities || '[]');
-        row.metadata = JSON.parse(row.metadata || '{}');
+        const machine = mapDbRowToJs(row);
+        machine.capabilities = JSON.parse(machine.capabilities || '[]');
+        machine.metadata = JSON.parse(machine.metadata || '{}');
+        return machine;
       }
       
-      return row;
+      return null;
     } catch (err) {
       throw err;
     }
@@ -93,11 +98,13 @@ const machineDb = {
       ).get(authToken);
       
       if (row) {
-        row.capabilities = JSON.parse(row.capabilities || '[]');
-        row.metadata = JSON.parse(row.metadata || '{}');
+        const machine = mapDbRowToJs(row);
+        machine.capabilities = JSON.parse(machine.capabilities || '[]');
+        machine.metadata = JSON.parse(machine.metadata || '{}');
+        return machine;
       }
       
-      return row;
+      return null;
     } catch (err) {
       throw err;
     }
@@ -110,11 +117,12 @@ const machineDb = {
         'SELECT * FROM machines WHERE user_id = ? AND is_removed = 0 ORDER BY status DESC, name ASC'
       ).all(userId);
       
-      return rows.map(row => ({
-        ...row,
-        capabilities: JSON.parse(row.capabilities || '[]'),
-        metadata: JSON.parse(row.metadata || '{}')
-      }));
+      return rows.map(row => {
+        const machine = mapDbRowToJs(row);
+        machine.capabilities = JSON.parse(machine.capabilities || '[]');
+        machine.metadata = JSON.parse(machine.metadata || '{}');
+        return machine;
+      });
     } catch (err) {
       throw err;
     }
@@ -138,9 +146,9 @@ const machineDb = {
       const fields = [];
       const values = [];
       
-      if (updates.ip_address !== undefined) {
+      if (updates.ipAddress !== undefined) {
         fields.push('ip_address = ?');
-        values.push(updates.ip_address);
+        values.push(updates.ipAddress);
       }
       
       if (updates.capabilities !== undefined) {
@@ -194,7 +202,11 @@ const machineDb = {
   // Upsert machine - create or update in a single operation
   upsertMachine: (machineData) => {
     try {
-      const { name, ip_address, capabilities, user_id } = machineData;
+      // Accept both camelCase and snake_case for backwards compatibility
+      const name = machineData.name;
+      const ip_address = machineData.ipAddress || machineData.ip_address;
+      const capabilities = machineData.capabilities;
+      const user_id = machineData.userId || machineData.user_id;
       
       // Check if machine exists
       const existing = db.prepare(
@@ -217,12 +229,11 @@ const machineDb = {
           existing.id
         );
         
-        return {
-          ...existing,
-          ip_address: ip_address || existing.ip_address,
-          capabilities: capabilities || JSON.parse(existing.capabilities || '[]'),
-          status: 'online'
-        };
+        const machine = mapDbRowToJs(existing);
+        machine.ipAddress = ip_address || machine.ipAddress;
+        machine.capabilities = capabilities || JSON.parse(existing.capabilities || '[]');
+        machine.status = 'online';
+        return machine;
       } else {
         // Create new machine with online status
         const id = crypto.randomUUID();
@@ -247,13 +258,13 @@ const machineDb = {
         return {
           id,
           name,
-          ip_address,
+          ipAddress: ip_address,
           status: 'online',
           capabilities: capabilities || [],
           metadata: {},
-          auth_token: authToken,
-          user_id,
-          last_seen: new Date()
+          authToken: authToken,
+          userId: user_id,
+          lastSeen: new Date()
         };
       }
     } catch (err) {

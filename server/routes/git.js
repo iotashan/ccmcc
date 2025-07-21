@@ -4,6 +4,15 @@ import { promisify } from 'util';
 import path from 'path';
 import { promises as fs } from 'fs';
 import { extractProjectDirectory } from '../projects.js';
+import {
+  getCurrentBranch,
+  validateGitRepository,
+  safeGitCommand,
+  gitErrorHandler,
+  isEmptyRepository,
+  getRemoteInfo,
+  parseGitStatus
+} from '../../shared/utils/git.js';
 
 const router = express.Router();
 const execAsync = promisify(exec);
@@ -19,32 +28,6 @@ async function getActualProjectPath(projectName) {
   }
 }
 
-// Helper function to validate git repository
-async function validateGitRepository(projectPath) {
-  try {
-    // Check if directory exists
-    await fs.access(projectPath);
-  } catch {
-    throw new Error(`Project path not found: ${projectPath}`);
-  }
-
-  try {
-    // Use --show-toplevel to get the root of the git repository
-    const { stdout: gitRoot } = await execAsync('git rev-parse --show-toplevel', { cwd: projectPath });
-    const normalizedGitRoot = path.resolve(gitRoot.trim());
-    const normalizedProjectPath = path.resolve(projectPath);
-    
-    // Ensure the git root matches our project path (prevent using parent git repos)
-    if (normalizedGitRoot !== normalizedProjectPath) {
-      throw new Error(`Project directory is not a git repository. This directory is inside a git repository at ${normalizedGitRoot}, but git operations should be run from the repository root.`);
-    }
-  } catch (error) {
-    if (error.message.includes('Project directory is not a git repository')) {
-      throw error;
-    }
-    throw new Error('Not a git repository. This directory does not contain a .git folder. Initialize a git repository with "git init" to use source control features.');
-  }
-}
 
 // Get git status for a project
 router.get('/status', async (req, res) => {
@@ -58,39 +41,20 @@ router.get('/status', async (req, res) => {
     const projectPath = await getActualProjectPath(project);
     console.log('Git status for project:', project, '-> path:', projectPath);
     
-    // Validate git repository
-    await validateGitRepository(projectPath);
+    // Validate git repository using shared utility
+    await validateGitRepository(projectPath, fs, execAsync);
 
-    // Get current branch
-    const { stdout: branch } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: projectPath });
+    // Get current branch using shared utility (handles empty repositories)
+    const branch = await getCurrentBranch(projectPath, execAsync);
     
     // Get git status
     const { stdout: statusOutput } = await execAsync('git status --porcelain', { cwd: projectPath });
     
-    const modified = [];
-    const added = [];
-    const deleted = [];
-    const untracked = [];
-    
-    statusOutput.split('\n').forEach(line => {
-      if (!line.trim()) return;
-      
-      const status = line.substring(0, 2);
-      const file = line.substring(3);
-      
-      if (status === 'M ' || status === ' M' || status === 'MM') {
-        modified.push(file);
-      } else if (status === 'A ' || status === 'AM') {
-        added.push(file);
-      } else if (status === 'D ' || status === ' D') {
-        deleted.push(file);
-      } else if (status === '??') {
-        untracked.push(file);
-      }
-    });
+    // Parse status using shared utility
+    const { modified, added, deleted, untracked } = parseGitStatus(statusOutput);
     
     res.json({
-      branch: branch.trim(),
+      branch: branch,
       modified,
       added,
       deleted,
@@ -98,14 +62,8 @@ router.get('/status', async (req, res) => {
     });
   } catch (error) {
     console.error('Git status error:', error);
-    res.json({ 
-      error: error.message.includes('not a git repository') || error.message.includes('Project directory is not a git repository') 
-        ? error.message 
-        : 'Git operation failed',
-      details: error.message.includes('not a git repository') || error.message.includes('Project directory is not a git repository')
-        ? error.message
-        : `Failed to get git status: ${error.message}`
-    });
+    const errorResponse = gitErrorHandler(error);
+    res.json(errorResponse);
   }
 });
 
@@ -120,8 +78,8 @@ router.get('/diff', async (req, res) => {
   try {
     const projectPath = await getActualProjectPath(project);
     
-    // Validate git repository
-    await validateGitRepository(projectPath);
+    // Validate git repository using shared utility
+    await validateGitRepository(projectPath, fs, execAsync);
     
     // Check if file is untracked
     const { stdout: statusOutput } = await execAsync(`git status --porcelain "${file}"`, { cwd: projectPath });
@@ -430,46 +388,27 @@ router.get('/remote-status', async (req, res) => {
 
   try {
     const projectPath = await getActualProjectPath(project);
-    await validateGitRepository(projectPath);
+    await validateGitRepository(projectPath, fs, execAsync);
 
-    // Get current branch
-    const { stdout: currentBranch } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: projectPath });
-    const branch = currentBranch.trim();
+    // Get current branch using shared utility (handles empty repositories)
+    const branch = await getCurrentBranch(projectPath, execAsync);
 
-    // Check if there's a remote tracking branch (smart detection)
-    let trackingBranch;
-    let remoteName;
-    try {
-      const { stdout } = await execAsync(`git rev-parse --abbrev-ref ${branch}@{upstream}`, { cwd: projectPath });
-      trackingBranch = stdout.trim();
-      remoteName = trackingBranch.split('/')[0]; // Extract remote name (e.g., "origin/main" -> "origin")
-    } catch (error) {
-      // No upstream branch configured - but check if we have remotes
-      let hasRemote = false;
-      let remoteName = null;
-      try {
-        const { stdout } = await execAsync('git remote', { cwd: projectPath });
-        const remotes = stdout.trim().split('\n').filter(r => r.trim());
-        if (remotes.length > 0) {
-          hasRemote = true;
-          remoteName = remotes.includes('origin') ? 'origin' : remotes[0];
-        }
-      } catch (remoteError) {
-        // No remotes configured
-      }
-      
+    // Get remote info using shared utility
+    const remoteInfo = await getRemoteInfo(projectPath, branch, execAsync);
+
+    if (!remoteInfo.hasUpstream) {
       return res.json({ 
-        hasRemote,
+        hasRemote: remoteInfo.hasRemote,
         hasUpstream: false,
         branch,
-        remoteName,
+        remoteName: remoteInfo.remoteName,
         message: 'No remote tracking branch configured'
       });
     }
 
     // Get ahead/behind counts
     const { stdout: countOutput } = await execAsync(
-      `git rev-list --count --left-right ${trackingBranch}...HEAD`,
+      `git rev-list --count --left-right ${remoteInfo.trackingBranch}...HEAD`,
       { cwd: projectPath }
     );
     
@@ -479,8 +418,8 @@ router.get('/remote-status', async (req, res) => {
       hasRemote: true,
       hasUpstream: true,
       branch,
-      remoteBranch: trackingBranch,
-      remoteName,
+      remoteBranch: remoteInfo.trackingBranch,
+      remoteName: remoteInfo.remoteName,
       ahead: ahead || 0,
       behind: behind || 0,
       isUpToDate: ahead === 0 && behind === 0
@@ -501,20 +440,12 @@ router.post('/fetch', async (req, res) => {
 
   try {
     const projectPath = await getActualProjectPath(project);
-    await validateGitRepository(projectPath);
+    await validateGitRepository(projectPath, fs, execAsync);
 
-    // Get current branch and its upstream remote
-    const { stdout: currentBranch } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: projectPath });
-    const branch = currentBranch.trim();
-
-    let remoteName = 'origin'; // fallback
-    try {
-      const { stdout } = await execAsync(`git rev-parse --abbrev-ref ${branch}@{upstream}`, { cwd: projectPath });
-      remoteName = stdout.trim().split('/')[0]; // Extract remote name
-    } catch (error) {
-      // No upstream, try to fetch from origin anyway
-      console.log('No upstream configured, using origin as fallback');
-    }
+    // Get current branch and its upstream remote using shared utilities
+    const branch = await getCurrentBranch(projectPath, execAsync);
+    const remoteInfo = await getRemoteInfo(projectPath, branch, execAsync);
+    const remoteName = remoteInfo.remoteName || 'origin';
 
     const { stdout } = await execAsync(`git fetch ${remoteName}`, { cwd: projectPath });
     
@@ -542,22 +473,16 @@ router.post('/pull', async (req, res) => {
 
   try {
     const projectPath = await getActualProjectPath(project);
-    await validateGitRepository(projectPath);
+    await validateGitRepository(projectPath, fs, execAsync);
 
-    // Get current branch and its upstream remote
-    const { stdout: currentBranch } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: projectPath });
-    const branch = currentBranch.trim();
-
-    let remoteName = 'origin'; // fallback
-    let remoteBranch = branch; // fallback
-    try {
-      const { stdout } = await execAsync(`git rev-parse --abbrev-ref ${branch}@{upstream}`, { cwd: projectPath });
-      const tracking = stdout.trim();
-      remoteName = tracking.split('/')[0]; // Extract remote name
-      remoteBranch = tracking.split('/').slice(1).join('/'); // Extract branch name
-    } catch (error) {
-      // No upstream, use fallback
-      console.log('No upstream configured, using origin/branch as fallback');
+    // Get current branch and its upstream remote using shared utilities
+    const branch = await getCurrentBranch(projectPath, execAsync);
+    const remoteInfo = await getRemoteInfo(projectPath, branch, execAsync);
+    
+    let remoteName = remoteInfo.remoteName || 'origin';
+    let remoteBranch = branch;
+    if (remoteInfo.trackingBranch) {
+      remoteBranch = remoteInfo.trackingBranch.split('/').slice(1).join('/');
     }
 
     const { stdout } = await execAsync(`git pull ${remoteName} ${remoteBranch}`, { cwd: projectPath });
@@ -609,22 +534,16 @@ router.post('/push', async (req, res) => {
 
   try {
     const projectPath = await getActualProjectPath(project);
-    await validateGitRepository(projectPath);
+    await validateGitRepository(projectPath, fs, execAsync);
 
-    // Get current branch and its upstream remote
-    const { stdout: currentBranch } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: projectPath });
-    const branch = currentBranch.trim();
-
-    let remoteName = 'origin'; // fallback
-    let remoteBranch = branch; // fallback
-    try {
-      const { stdout } = await execAsync(`git rev-parse --abbrev-ref ${branch}@{upstream}`, { cwd: projectPath });
-      const tracking = stdout.trim();
-      remoteName = tracking.split('/')[0]; // Extract remote name
-      remoteBranch = tracking.split('/').slice(1).join('/'); // Extract branch name
-    } catch (error) {
-      // No upstream, use fallback
-      console.log('No upstream configured, using origin/branch as fallback');
+    // Get current branch and its upstream remote using shared utilities
+    const branch = await getCurrentBranch(projectPath, execAsync);
+    const remoteInfo = await getRemoteInfo(projectPath, branch, execAsync);
+    
+    let remoteName = remoteInfo.remoteName || 'origin';
+    let remoteBranch = branch;
+    if (remoteInfo.trackingBranch) {
+      remoteBranch = remoteInfo.trackingBranch.split('/').slice(1).join('/');
     }
 
     const { stdout } = await execAsync(`git push ${remoteName} ${remoteBranch}`, { cwd: projectPath });
@@ -679,11 +598,10 @@ router.post('/publish', async (req, res) => {
 
   try {
     const projectPath = await getActualProjectPath(project);
-    await validateGitRepository(projectPath);
+    await validateGitRepository(projectPath, fs, execAsync);
 
-    // Get current branch to verify it matches the requested branch
-    const { stdout: currentBranch } = await execAsync('git rev-parse --abbrev-ref HEAD', { cwd: projectPath });
-    const currentBranchName = currentBranch.trim();
+    // Get current branch using shared utility to verify it matches the requested branch
+    const currentBranchName = await getCurrentBranch(projectPath, execAsync);
     
     if (currentBranchName !== branch) {
       return res.status(400).json({ 

@@ -45,6 +45,9 @@ import mcpRoutes from './routes/mcp.js';
 import machineRoutes from './routes/machines.js';
 import settingsRoutes from './routes/settings.js';
 import securityRoutes from './routes/security.js';
+import { createPtyConfig, buildShellCommand, generateWelcomeMessage } from '../shared/utils/shell.js';
+import { handleFileError, createErrorResponse } from '../shared/utils/errors.js';
+import { getFileTree as getSharedFileTree, fileExists, getFileStats } from '../shared/utils/files.js';
 import { initializeDatabase, machineDb } from './database/db.js';
 import { validateApiKey, authenticateToken, authenticateWebSocket } from './middleware/auth.js';
 import { machineManager } from './machines/MachineManager.js';
@@ -321,9 +324,9 @@ app.post('/api/hooks/session', async (req, res) => {
     // Get user ID from token to broadcast to correct UI clients
     try {
       const tokenData = await validateApiToken(token);
-      if (tokenData && tokenData.user_id) {
+      if (tokenData && tokenData.userId) {
         // Broadcast update to all UI clients for this user
-        machineManager.broadcastClaudeSessionUpdate(tokenData.user_id, updateMessage);
+        machineManager.broadcastClaudeSessionUpdate(tokenData.userId, updateMessage);
       }
     } catch (tokenError) {
       console.error('Error validating token for broadcast:', tokenError);
@@ -511,13 +514,9 @@ app.get('/api/projects/:projectName/file', authenticateToken, async (req, res) =
     res.json({ content, path: filePath });
   } catch (error) {
     console.error('Error reading file:', error);
-    if (error.code === 'ENOENT') {
-      res.status(404).json({ error: 'File not found' });
-    } else if (error.code === 'EACCES') {
-      res.status(403).json({ error: 'Permission denied' });
-    } else {
-      res.status(500).json({ error: error.message });
-    }
+    const errorResponse = handleFileError(error);
+    const statusCode = error.code === 'ENOENT' ? 404 : error.code === 'EACCES' ? 403 : 500;
+    res.status(statusCode).json(errorResponse);
   }
 });
 
@@ -605,13 +604,9 @@ app.put('/api/projects/:projectName/file', authenticateToken, async (req, res) =
     });
   } catch (error) {
     console.error('Error saving file:', error);
-    if (error.code === 'ENOENT') {
-      res.status(404).json({ error: 'File or directory not found' });
-    } else if (error.code === 'EACCES') {
-      res.status(403).json({ error: 'Permission denied' });
-    } else {
-      res.status(500).json({ error: error.message });
-    }
+    const errorResponse = handleFileError(error);
+    const statusCode = error.code === 'ENOENT' ? 404 : error.code === 'EACCES' ? 403 : 500;
+    res.status(statusCode).json(errorResponse);
   }
 });
 
@@ -637,7 +632,12 @@ app.get('/api/projects/:projectName/files', authenticateToken, async (req, res) 
       return res.status(404).json({ error: `Project path not found: ${actualPath}` });
     }
     
-    const files = await getFileTree(actualPath, 3, 0, true);
+    // Use shared file tree utility with proper options
+    const files = await getSharedFileTree(actualPath, {
+      maxDepth: 3,
+      includeHidden: true,
+      maxFiles: 10000
+    });
     const hiddenFiles = files.filter(f => f.name.startsWith('.'));
     res.json(files);
   } catch (error) {
@@ -749,15 +749,15 @@ function handleChatConnection(ws, user, connectionId) {
         console.log('💬 User message:', data.command || '[Continue/Resume]');
         console.log('📁 Project:', data.options?.projectPath || 'Unknown');
         console.log('🔄 Session:', data.options?.sessionId ? 'Resume' : 'New');
-        console.log('🖥️  Machine:', data.options?.machine_id || 'local');
+        console.log('🖥️  Machine:', data.options?.machineId || 'local');
         
-        // If machine_id is specified and not 'local', route to machine
-        if (data.options?.machine_id && data.options.machine_id !== 'local') {
-          const routed = machineManager.routeToMachine(data.options.machine_id, {
+        // If machineId is specified and not 'local', route to machine
+        if (data.options?.machineId && data.options.machineId !== 'local') {
+          const routed = machineManager.routeToMachine(data.options.machineId, {
             type: ServerMessageTypes.REQUEST_CLAUDE_EXECUTE,
             command: data.command,
             options: data.options,
-            request_id: crypto.randomUUID()
+            requestId: crypto.randomUUID()
           });
           
           if (!routed) {
@@ -780,8 +780,8 @@ function handleChatConnection(ws, user, connectionId) {
         }));
       } else if (data.type === 'machine-remove') {
         // Handle machine removal
-        if (user && data.machine_id) {
-          await machineDb.removeMachine(data.machine_id);
+        if (user && data.machineId) {
+          await machineDb.removeMachine(data.machineId);
           await machineManager.broadcastMachineList(user.id);
         }
       }
@@ -875,7 +875,7 @@ function handleShellConnection(ws, user, machineId, connectionId) {
           // Route shell init to remote machine
           const routed = machineManager.routeToMachine(machineId, {
             type: ServerMessageTypes.REQUEST_SHELL_INIT,
-            request_id: shellSessionId,
+            requestId: shellSessionId,
             projectPath,
             sessionId,
             hasSession,
@@ -920,15 +920,11 @@ function handleShellConnection(ws, user, machineId, connectionId) {
           console.log('🔧 Executing shell command:', shellCommand);
           
           // Start shell using PTY for proper terminal emulation
+          const ptyConfig = createPtyConfig(80, 24, process.env.HOME || '/');
           shellProcess = pty.spawn('bash', ['-c', shellCommand], {
-            name: 'xterm-256color',
-            cols: 80,
-            rows: 24,
-            cwd: process.env.HOME || '/', // Start from home directory
+            ...ptyConfig,
             env: { 
-              ...process.env,
-              TERM: 'xterm-256color',
-              COLORTERM: 'truecolor',
+              ...ptyConfig.env,
               FORCE_COLOR: '3',
               // Override browser opening commands to echo URL for detection
               BROWSER: 'echo "OPEN_URL:"'
@@ -1008,7 +1004,7 @@ function handleShellConnection(ws, user, machineId, connectionId) {
         if (isRemoteShell && machineId) {
           const routed = machineManager.routeToMachine(machineId, {
             type: ServerMessageTypes.REQUEST_SHELL_INPUT,
-            request_id: shellSessionId,
+            requestId: shellSessionId,
             data: data.data
           });
           
@@ -1033,7 +1029,7 @@ function handleShellConnection(ws, user, machineId, connectionId) {
         if (isRemoteShell && machineId) {
           machineManager.routeToMachine(machineId, {
             type: ServerMessageTypes.REQUEST_SHELL_RESIZE,
-            request_id: shellSessionId,
+            requestId: shellSessionId,
             cols: data.cols,
             rows: data.rows
           });
@@ -1073,7 +1069,7 @@ function handleShellConnection(ws, user, machineId, connectionId) {
       // Send shell exit command to remote machine
       machineManager.routeToMachine(machineId, {
         type: ServerMessageTypes.REQUEST_SHELL_EXIT,
-        request_id: shellSessionId
+        requestId: shellSessionId
       });
     }
     
@@ -1148,11 +1144,11 @@ function handleMachineConnection(ws, user, connectionId) {
         case ClientMessageTypes.MACHINE_REGISTER:
           // Register the machine
           const result = await machineManager.registerMachine(ws, {
-            name: data.name || data.ip_address || 'Unknown',
-            ip_address: data.ip_address,
+            name: data.name || data.ipAddress || 'Unknown',
+            ipAddress: data.ipAddress,
             capabilities: data.capabilities || [],
-            user_id: user.id,
-            auth_token: data.auth_token
+            userId: user.id,
+            authToken: data.authToken
           });
           
           if (result.success) {
@@ -1187,7 +1183,7 @@ function handleMachineConnection(ws, user, connectionId) {
             const projects = await getProjects();
             sendEncrypted({
               type: ClientMessageTypes.PROJECT_LIST,
-              request_id: data.request_id,
+              requestId: data.requestId,
               projects
             });
           }
@@ -1199,7 +1195,7 @@ function handleMachineConnection(ws, user, connectionId) {
             const sessions = await getSessions(data.project_name, data.limit || 10, data.offset || 0);
             sendEncrypted({
               type: ClientMessageTypes.SESSION_LIST,
-              request_id: data.request_id,
+              requestId: data.requestId,
               sessions
             });
           }
@@ -1207,14 +1203,14 @@ function handleMachineConnection(ws, user, connectionId) {
           
         case ClientMessageTypes.CLAUDE_RESPONSE:
           // Forward Claude responses to UI clients with proper format
-          if (machineId && data.request_id) {
+          if (machineId && data.requestId) {
             // Translate to UI format
             const uiMessage = {
               type: 'claude-response',
               data: {
                 type: 'text',
                 text: data.data,
-                session_id: data.request_id // Using request_id as session_id for now
+                sessionId: data.requestId // Using requestId as sessionId for now
               }
             };
             
@@ -1892,7 +1888,7 @@ function permToRwx(perm) {
   return r + w + x;
 }
 
-async function getFileTree(dirPath, maxDepth = 3, currentDepth = 0, showHidden = true) {
+async function getFileTreeLegacy(dirPath, maxDepth = 3, currentDepth = 0, showHidden = true) {
   // Using fsPromises from import
   const items = [];
   
@@ -1941,7 +1937,7 @@ async function getFileTree(dirPath, maxDepth = 3, currentDepth = 0, showHidden =
         try {
           // Check if we can access the directory before trying to read it
           await fsPromises.access(item.path, fs.constants.R_OK);
-          item.children = await getFileTree(item.path, maxDepth, currentDepth + 1, showHidden);
+          item.children = await getFileTreeLegacy(item.path, maxDepth, currentDepth + 1, showHidden);
         } catch (e) {
           // Silently skip directories we can't access (permission denied, etc.)
           item.children = [];

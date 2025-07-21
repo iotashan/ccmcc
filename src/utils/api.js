@@ -156,8 +156,18 @@ export const api = {
   projects: () => authenticatedFetch('/api/projects'),
   sessions: (projectName, limit = 5, offset = 0) => 
     authenticatedFetch(`/api/projects/${projectName}/sessions?limit=${limit}&offset=${offset}`),
-  sessionMessages: (projectName, sessionId) =>
-    authenticatedFetch(`/api/projects/${projectName}/sessions/${sessionId}/messages`),
+  getSessionMessages: async (projectName, sessionId, machineId) => {
+    const url = `/api/projects/${projectName}/sessions/${sessionId}/messages`;
+    // If machineId is provided and not 'local', it will be added via X-Machine-ID header in authenticatedFetch
+    if (machineId && machineId !== 'local') {
+      localStorage.setItem('selectedMachine', machineId);
+    }
+    const response = await authenticatedFetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch session messages: ${response.statusText}`);
+    }
+    return response.json();
+  },
   renameProject: (projectName, displayName) =>
     authenticatedFetch(`/api/projects/${projectName}/rename`, {
       method: 'PUT',

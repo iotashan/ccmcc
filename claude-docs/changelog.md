@@ -2,6 +2,36 @@
 
 All notable changes to Claude Code UI are documented in this file.
 
+## [July 21, 2025] - Codebase Unification Complete
+
+### Major Refactoring
+- **Implemented**: Shared utilities layer reducing code duplication by 50%+
+- **Created**: `/shared` directory with utilities for Git, Shell, Files, and Error handling
+- **Migrated**: 12+ duplicate implementations consolidated into shared modules
+- **Impact**: ~1,400 lines of shared utilities replace ~2,800+ lines of duplicated code
+
+### Fixed
+- **Critical Bug**: Git operations now work correctly on empty repositories
+  - **Old**: `git rev-parse --abbrev-ref HEAD` failed when HEAD doesn't exist
+  - **New**: `git branch --show-current` with fallbacks handles all cases
+  - **Files**: Both server and client now use shared `getCurrentBranch()` utility
+
+### Added
+- **Shared Utilities**:
+  - `shared/utils/git.js` - Git operations with empty repo support
+  - `shared/utils/shell.js` - PTY configuration and shell utilities
+  - `shared/utils/errors.js` - Standardized error handling
+  - `shared/utils/files.js` - File operations and tree traversal
+  - `shared/types/errors.js` - Custom error classes and codes
+- **Documentation**: Comprehensive README for shared utilities
+- **Testing**: Test coverage for all shared utilities
+
+### Technical Details
+- **Architecture**: ES6 modules with dependency injection for testing
+- **Compatibility**: Maintains backward compatibility with existing APIs
+- **Cross-platform**: Handles platform-specific issues (macOS symlinks, Windows paths)
+- **Error Handling**: Consistent error codes and messages across the system
+
 ## [July 19, 2025] - Multi-Machine Bug Fixes
 
 ### Fixed

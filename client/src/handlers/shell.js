@@ -1,5 +1,7 @@
 import pty from 'node-pty';
 import { ClientMessageTypes } from '../../../shared/protocol.js';
+import { createPtyConfig, buildShellCommand, generateWelcomeMessage } from '../../../shared/utils/shell.js';
+import { handleShellError, createErrorResponse } from '../../../shared/utils/errors.js';
 
 export class ShellHandler {
   constructor(connection, logger) {
@@ -35,12 +37,13 @@ export class ShellHandler {
       }
     } catch (error) {
       this.logger.error('Error handling shell operation:', error);
+      const errorResponse = handleShellError(error);
       
       // Send error response
       this.connection.send({
         type: ClientMessageTypes.SHELL_OUTPUT,
         request_id,
-        data: `\r\n\x1b[31mError: ${error.message}\x1b[0m\r\n`
+        data: `\r\n\x1b[31mError: ${errorResponse.message}\x1b[0m\r\n`
       });
     }
   }
@@ -74,15 +77,11 @@ export class ShellHandler {
       const shellCommand = `cd "${projectPath}" && ${claudeCommand}`;
       
       // Start shell using PTY
+      const ptyConfig = createPtyConfig(cols || 80, rows || 24, process.env.HOME || '/');
       const shellProcess = pty.spawn('bash', ['-c', shellCommand], {
-        name: 'xterm-256color',
-        cols: cols || 80,
-        rows: rows || 24,
-        cwd: process.env.HOME || '/',
+        ...ptyConfig,
         env: {
-          ...process.env,
-          TERM: 'xterm-256color',
-          COLORTERM: 'truecolor',
+          ...ptyConfig.env,
           FORCE_COLOR: '3',
           // Override browser opening to echo URL for detection
           BROWSER: 'echo "OPEN_URL:"'
@@ -93,9 +92,7 @@ export class ShellHandler {
       this.activeSessions.set(request_id, shellProcess);
       
       // Send initial welcome message
-      const welcomeMsg = hasSession ? 
-        `\x1b[36mResuming Claude session ${sessionId} in: ${projectPath}\x1b[0m\r\n` :
-        `\x1b[36mStarting new Claude session in: ${projectPath}\x1b[0m\r\n`;
+      const welcomeMsg = generateWelcomeMessage('claude', sessionId, projectPath);
       
       this.connection.send({
         type: ClientMessageTypes.SHELL_OUTPUT,
@@ -131,7 +128,8 @@ export class ShellHandler {
       
     } catch (error) {
       this.logger.error('Error starting shell:', error);
-      throw error;
+      const shellError = handleShellError(error);
+      throw shellError;
     }
   }
 

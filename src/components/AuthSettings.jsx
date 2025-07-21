@@ -201,10 +201,10 @@ CLAUDE_CODE_UI_AUTH_TOKEN=${authToken}`;
                     <div>
                       <p className="font-medium text-gray-900 dark:text-white">{token.name}</p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Created: {new Date(token.created_at).toLocaleDateString()}
-                        {token.last_used_at && (
+                        Created: {new Date(token.createdAt).toLocaleDateString()}
+                        {token.lastUsedAt && (
                           <span className="ml-2">
-                            Last used: {new Date(token.last_used_at).toLocaleDateString()}
+                            Last used: {new Date(token.lastUsedAt).toLocaleDateString()}
                           </span>
                         )}
                       </p>

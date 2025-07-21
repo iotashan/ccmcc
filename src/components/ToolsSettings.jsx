@@ -1590,10 +1590,10 @@ CLAUDE_CODE_UI_ENCRYPTION_KEY=${serverInfo?.encryptionKey || 'encryption-key-wil
                             <div>
                               <p className="font-medium text-foreground">{token.name}</p>
                               <p className="text-sm text-muted-foreground">
-                                Created: {new Date(token.created_at).toLocaleDateString()}
-                                {token.last_used_at && (
+                                Created: {new Date(token.createdAt).toLocaleDateString()}
+                                {token.lastUsedAt && (
                                   <span className="ml-2">
-                                    Last used: {new Date(token.last_used_at).toLocaleDateString()}
+                                    Last used: {new Date(token.lastUsedAt).toLocaleDateString()}
                                   </span>
                                 )}
                               </p>

@@ -43,14 +43,14 @@ const authenticateToken = async (req, res, next) => {
     if (apiTokenData) {
       // API token validation successful
       req.user = {
-        id: apiTokenData.user_id,
+        id: apiTokenData.userId,
         username: apiTokenData.username
       };
       req.authType = 'api_token';
       
       securityLogger.logSecurityEvent(SecurityEventTypes.AUTH_SUCCESS, {
         ip: clientIP,
-        userId: apiTokenData.user_id,
+        userId: apiTokenData.userId,
         username: apiTokenData.username,
         authType: 'api_token',
         path: req.path
@@ -137,7 +137,7 @@ const authenticateWebSocket = async (token, clientIP = null) => {
       if (clientIP) {
         securityLogger.logSecurityEvent(SecurityEventTypes.AUTH_SUCCESS, {
           ip: clientIP,
-          userId: apiTokenData.user_id,
+          userId: apiTokenData.userId,
           username: apiTokenData.username,
           authType: 'api_token',
           connectionType: 'websocket'
@@ -145,8 +145,8 @@ const authenticateWebSocket = async (token, clientIP = null) => {
       }
       
       return {
-        id: apiTokenData.user_id,
-        userId: apiTokenData.user_id,
+        id: apiTokenData.userId,
+        userId: apiTokenData.userId,
         username: apiTokenData.username,
         authType: 'api_token',
         apiToken: token  // Include the actual token for encryption key derivation

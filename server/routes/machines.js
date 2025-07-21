@@ -15,10 +15,10 @@ router.get('/', async (req, res) => {
       id: m.id,
       name: m.name,
       status: m.status,
-      lastSeen: m.last_seen,
-      firstSeen: m.first_seen,
+      lastSeen: m.lastSeen,
+      firstSeen: m.firstSeen,
       capabilities: m.capabilities,
-      ipAddress: m.ip_address,
+      ipAddress: m.ipAddress,
       metadata: m.metadata
     }));
     
@@ -43,7 +43,7 @@ router.get('/:machineId', async (req, res) => {
     }
     
     // Check if user owns this machine
-    if (machine.user_id !== req.user.id) {
+    if (machine.userId !== req.user.id) {
       return res.status(403).json({ error: 'Access denied' });
     }
     
@@ -51,8 +51,8 @@ router.get('/:machineId', async (req, res) => {
       id: machine.id,
       name: machine.name,
       status: machine.status,
-      lastSeen: machine.last_seen,
-      firstSeen: machine.first_seen,
+      lastSeen: machine.lastSeen,
+      firstSeen: machine.firstSeen,
       capabilities: machine.capabilities,
       ipAddress: machine.ip_address,
       metadata: machine.metadata
@@ -74,7 +74,7 @@ router.delete('/:machineId', async (req, res) => {
     }
     
     // Check if user owns this machine
-    if (machine.user_id !== req.user.id) {
+    if (machine.userId !== req.user.id) {
       return res.status(403).json({ error: 'Access denied' });
     }
     
@@ -108,7 +108,7 @@ router.post('/:machineId/restore', async (req, res) => {
     }
     
     // Check if user owns this machine
-    if (machine.user_id !== req.user.id) {
+    if (machine.userId !== req.user.id) {
       return res.status(403).json({ error: 'Access denied' });
     }
     

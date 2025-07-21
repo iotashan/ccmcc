@@ -3,6 +3,8 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import crypto from 'crypto';
+import { mapDbRowToJs } from './fieldMapping.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -53,7 +55,7 @@ const userDb = {
   getUserByUsername: (username) => {
     try {
       const row = db.prepare('SELECT * FROM users WHERE username = ? AND is_active = 1').get(username);
-      return row;
+      return row ? mapDbRowToJs(row) : null;
     } catch (err) {
       throw err;
     }
@@ -72,7 +74,7 @@ const userDb = {
   getUserById: (userId) => {
     try {
       const row = db.prepare('SELECT id, username, created_at, last_login FROM users WHERE id = ? AND is_active = 1').get(userId);
-      return row;
+      return row ? mapDbRowToJs(row) : null;
     } catch (err) {
       throw err;
     }
@@ -85,7 +87,6 @@ const userDb = {
       
       // If user exists but has no encryption key, generate one
       if (row && !row.encryption_key) {
-        const crypto = require('crypto');
         const encryptionKey = crypto.randomBytes(32).toString('base64');
         db.prepare('UPDATE users SET encryption_key = ? WHERE id = ?').run(encryptionKey, userId);
         return encryptionKey;
@@ -124,7 +125,8 @@ const apiTokensDb = {
         WHERE t.token_hash = ? AND t.is_active = 1 
         AND (t.expires_at IS NULL OR t.expires_at > datetime('now'))
       `);
-      return stmt.get(tokenHash);
+      const row = stmt.get(tokenHash);
+      return row ? mapDbRowToJs(row) : null;
     } catch (err) {
       throw err;
     }
@@ -149,7 +151,8 @@ const apiTokensDb = {
         WHERE user_id = ? AND is_active = 1
         ORDER BY created_at DESC
       `);
-      return stmt.all(userId);
+      const rows = stmt.all(userId);
+      return rows.map(mapDbRowToJs);
     } catch (err) {
       throw err;
     }
@@ -195,7 +198,8 @@ const apiTokensDb = {
         WHERE t.is_active = 1 
         AND (t.expires_at IS NULL OR t.expires_at > datetime('now'))
       `);
-      return stmt.all();
+      const rows = stmt.all();
+      return rows.map(mapDbRowToJs);
     } catch (err) {
       throw err;
     }

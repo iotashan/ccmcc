@@ -88,47 +88,47 @@ class MachineManager {
   // Register a machine connection
   async registerMachine(ws, machineData) {
     try {
-      const { name, ip_address, capabilities, user_id, auth_token } = machineData;
+      const { name, ipAddress, capabilities, userId, authToken } = machineData;
       
       // Validate API token if provided
       let machine;
-      let actualUserId = user_id;
+      let actualUserId = userId;
       
-      if (auth_token) {
+      if (authToken) {
         // Use new API token validation
-        const tokenData = await validateApiToken(auth_token);
+        const tokenData = await validateApiToken(authToken);
         if (!tokenData) {
           throw new Error('Invalid API token');
         }
-        actualUserId = tokenData.user_id;
+        actualUserId = tokenData.userId;
       }
       
       // Use upsert to create/update machine and set online status in one operation
       machine = await machineDb.upsertMachine({
         name,
-        ip_address,
+        ipAddress,
         capabilities,
-        user_id: actualUserId
+        userId: actualUserId
       });
 
       // Store connection
       this.connections.set(machine.id, {
         ws,
-        userId: machine.user_id,
+        userId: machine.userId,
         machineId: machine.id,
         lastHeartbeat: Date.now(),
         capabilities: machine.capabilities
       });
 
       // Broadcast updated machine list
-      await this.broadcastMachineList(machine.user_id);
+      await this.broadcastMachineList(machine.userId);
 
       return {
         success: true,
         machine: {
           id: machine.id,
           name: machine.name,
-          auth_token: machine.auth_token
+          authToken: machine.authToken
         }
       };
     } catch (error) {
@@ -190,7 +190,7 @@ class MachineManager {
         id: m.id,
         name: m.name,
         status: m.status,
-        lastSeen: m.last_seen,
+        lastSeen: m.lastSeen,
         capabilities: m.capabilities
       }));
 
@@ -214,7 +214,7 @@ class MachineManager {
         id: m.id,
         name: m.name,
         status: m.status,
-        lastSeen: m.last_seen,
+        lastSeen: m.lastSeen,
         capabilities: m.capabilities
       }));
 
