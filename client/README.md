@@ -1,6 +1,6 @@
-# Claude Code UI Client Agent
+# CCMCC Client Agent
 
-Machine client for Claude Code UI multi-machine support. This agent allows remote machines to connect to a Claude Code UI server, enabling multi-machine development workflows.
+Machine client for Claude Code Mission Control Center (CCMCC). This agent enables remote machines to connect to a CCMCC server, allowing you to manage Claude Code sessions across multiple machines from a single interface.
 
 ## Installation
 
@@ -16,8 +16,8 @@ npm install
 Set the following environment variables:
 
 ```bash
-export CLAUDE_CODE_UI_SERVER_ADDRESS=http://your-server:3002
-export CLAUDE_CODE_UI_CLIENT_NAME="My Remote Machine"
+export CCMCC_SERVER_ADDRESS=http://your-server:3020
+export CCMCC_CLIENT_NAME="My Remote Machine"
 ```
 
 Then run:
@@ -26,7 +26,7 @@ Then run:
 npm start
 ```
 
-Note: The client will automatically use the authentication token from `~/.claude-code/auth.json` that was created when you logged into the Claude Code UI.
+Note: The client will automatically use the authentication token from `~/.claude-code/auth.json` that was created when you logged into CCMCC.
 
 ### Running with Command Line Arguments
 
@@ -42,7 +42,7 @@ Or use the CLI wrapper:
 
 ### Command Line Options
 
-- `-s, --server <address>`: Claude Code UI server address (default: http://localhost:3002)
+- `-s, --server <address>`: CCMCC server address (default: http://localhost:3020)
 - `-n, --name <name>`: Machine name (default: hostname)
 - `-h, --help`: Display help information
 

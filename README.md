@@ -5,7 +5,15 @@
 </div>
 
 
-Claude Code Mission Control Center (CCMCC) is a comprehensive desktop and mobile interface for [Claude Code](https://docs.anthropic.com/en/docs/claude-code), Anthropic's official CLI for AI-assisted coding. CCMCC provides a powerful mission control interface to manage your Claude Code projects and sessions locally or remotely, offering a unified command center that works everywhere. 
+Claude Code Mission Control Center (CCMCC) is a comprehensive desktop and mobile interface for [Claude Code](https://docs.anthropic.com/en/docs/claude-code), Anthropic's official CLI for AI-assisted coding. 
+
+**CCMCC is a fork of the excellent [Claude Code UI](https://github.com/siteboon/claudecodeui) project**, enhanced with a focus on multi-project and multi-machine capabilities. This fork enables developers to work on multiple Claude Code projects simultaneously, even across different machines, providing a true mission control experience for managing all your AI-assisted coding sessions from a single interface.
+
+Key enhancements in CCMCC:
+- **Multi-Project Management** - Work on multiple Claude Code projects simultaneously without context switching
+- **Cross-Machine Control** - Connect to and manage Claude Code sessions running on different machines
+- **Unified Mission Control** - Single interface to oversee all your AI coding activities across projects and machines
+- **Enhanced Session Management** - Improved handling of concurrent sessions and project switching 
 
 ## Screenshots
 
@@ -34,12 +42,18 @@ Claude Code Mission Control Center (CCMCC) is a comprehensive desktop and mobile
 
 ## Features
 
-- **Responsive Design** - Works seamlessly across desktop, tablet, and mobile so you can also use Claude Code from mobile 
-- **Interactive Chat Interface** - Built-in chat interface for seamless communication with Claude Code
-- **Integrated Shell Terminal** - Direct access to Claude Code CLI through built-in shell functionality
-- **File Explorer** - Interactive file tree with syntax highlighting and live editing
-- **Git Explorer** - View, stage and commit your changes. You can also switch branches 
-- **Session Management** - Resume conversations, manage multiple sessions, and track history
+### Core Capabilities
+- **Multi-Project Dashboard** - Manage multiple Claude Code projects simultaneously from a single interface
+- **Cross-Machine Control** - Connect to Claude Code instances running on different machines (local and remote)
+- **Unified Session Management** - Track and switch between sessions across all your projects and machines
+- **Responsive Design** - Works seamlessly across desktop, tablet, and mobile devices
+
+### Development Tools
+- **Interactive Chat Interface** - Seamless communication with Claude Code across all your projects
+- **Integrated Shell Terminal** - Direct CLI access with project-specific contexts
+- **File Explorer** - Navigate and edit files with syntax highlighting
+- **Git Integration** - View changes, stage files, and commit across projects
+- **Real-time Sync** - Live updates when switching between projects and machines
 
 
 ## Quick Start
@@ -53,8 +67,8 @@ Claude Code Mission Control Center (CCMCC) is a comprehensive desktop and mobile
 
 1. **Clone the repository:**
 ```bash
-git clone https://github.com/siteboon/claudecodeui.git
-cd claudecodeui
+git clone https://github.com/iotashan/ccmcc.git
+cd ccmcc
 ```
 
 2. **Install dependencies:**
@@ -206,8 +220,8 @@ This architecture allows you to:
 
 1. **Clone the repository on the client machine:**
 ```bash
-git clone https://github.com/siteboon/claudecodeui.git
-cd claudecodeui/client
+git clone https://github.com/iotashan/ccmcc.git
+cd ccmcc/client
 ```
 
 2. **Install client dependencies:**
@@ -354,7 +368,10 @@ GNU General Public License v3.0 - see [LICENSE](LICENSE) file for details.
 
 This project is open source and free to use, modify, and distribute under the GPL v3 license.
 
-## Acknowledgments
+## Credits & Acknowledgments
+
+### Original Project
+**CCMCC is a fork of [Claude Code UI](https://github.com/siteboon/claudecodeui)** by the Siteboon team. We are deeply grateful for their excellent work in creating the original interface for Claude Code. Their project laid the foundation that made CCMCC possible.
 
 ### Built With
 - **[Claude Code](https://docs.anthropic.com/en/docs/claude-code)** - Anthropic's official CLI
@@ -371,10 +388,13 @@ This project is open source and free to use, modify, and distribute under the GP
 - **Watch** for updates and new releases
 - **Follow** the project for announcements
 
-### Sponsors
-- [Siteboon - AI powered website builder](https://siteboon.ai)
+### Contributing
+We welcome contributions! Whether it's bug fixes, new features, or documentation improvements, your help makes CCMCC better for everyone.
+
 ---
 
 <div align="center">
-  <strong>Made with care for the Claude Code community.</strong>
+  <strong>Made with care for developers who juggle multiple AI-assisted coding projects.</strong>
+  <br>
+  <em>Fork of the original Claude Code UI project</em>
 </div>

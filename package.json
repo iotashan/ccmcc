@@ -23,6 +23,14 @@
   ],
   "author": "Claude Code Mission Control Center Contributors",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iotashan/ccmcc.git"
+  },
+  "bugs": {
+    "url": "https://github.com/iotashan/ccmcc/issues"
+  },
+  "homepage": "https://github.com/iotashan/ccmcc#readme",
   "dependencies": {
     "@anthropic-ai/claude-code": "^1.0.24",
     "@codemirror/lang-css": "^6.3.1",

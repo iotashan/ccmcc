@@ -1974,7 +1974,7 @@ async function startServer() {
     await loadTokensIntoCache();
     
     server.listen(PORT, '0.0.0.0', async () => {
-      console.log(`Claude Code UI server running on http://0.0.0.0:${PORT}`);
+      console.log(`CCMCC server running on http://0.0.0.0:${PORT}`);
       
       // Start watching the projects folder for changes
       await setupProjectsWatcher(); // Re-enabled with better-sqlite3

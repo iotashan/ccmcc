@@ -14,7 +14,7 @@ const finalConfig = mergeConfig(cliOptions);
 const logger = new Logger(finalConfig.debug);
 
 // Show configuration
-logger.info('Claude Code UI Client starting...');
+logger.info('CCMCC Client starting...');
 logger.info(`Server: ${finalConfig.serverAddress}`);
 logger.info(`Client Name: ${finalConfig.clientName}`);
 logger.info(`Capabilities: ${finalConfig.capabilities.join(', ')}`);
