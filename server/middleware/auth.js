@@ -2,19 +2,22 @@ import jwt from 'jsonwebtoken';
 import { userDb } from '../database/db.js';
 import { validateApiToken } from '../utils/apiTokens.js';
 import { securityLogger, SecurityEventTypes, LogLevels } from '../utils/securityLogger.js';
+import { getJWTSecret, getAPIKey } from '../../shared/utils/config.js';
 
-// Get JWT secret from environment or use default (for development)
-const JWT_SECRET = process.env.JWT_SECRET || 'claude-ui-dev-secret-change-in-production';
+// Get JWT secret using shared configuration utility
+const JWT_SECRET = getJWTSecret();
 
 // Optional API key middleware
 const validateApiKey = (req, res, next) => {
+  const configuredAPIKey = getAPIKey();
+  
   // Skip API key validation if not configured
-  if (!process.env.API_KEY) {
+  if (!configuredAPIKey) {
     return next();
   }
   
   const apiKey = req.headers['x-api-key'];
-  if (apiKey !== process.env.API_KEY) {
+  if (apiKey !== configuredAPIKey) {
     return res.status(401).json({ error: 'Invalid API key' });
   }
   next();

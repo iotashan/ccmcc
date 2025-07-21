@@ -4,12 +4,26 @@ export const useMachines = (websocketMessages = []) => {
   const [machines, setMachines] = useState([]);
   const [selectedMachine, setSelectedMachine] = useState('local');
 
-  // Load saved machine selection from localStorage
+  // Load saved machine selection from localStorage, but always default to 'local' on fresh login
   useEffect(() => {
-    const savedMachine = localStorage.getItem('selectedMachine');
-    if (savedMachine) {
-      setSelectedMachine(savedMachine);
+    // Check if this is a fresh login by looking for auth token changes
+    // If the user just logged in, we want to always start with Local Machine
+    const authToken = localStorage.getItem('auth-token');
+    const lastAuthToken = localStorage.getItem('lastAuthToken');
+    
+    if (authToken && authToken !== lastAuthToken) {
+      // This is a fresh login - always select Local Machine
+      setSelectedMachine('local');
+      localStorage.setItem('selectedMachine', 'local');
+      localStorage.setItem('lastAuthToken', authToken);
+    } else if (authToken === lastAuthToken) {
+      // Same session - restore saved machine selection
+      const savedMachine = localStorage.getItem('selectedMachine');
+      if (savedMachine) {
+        setSelectedMachine(savedMachine);
+      }
     }
+    // If no auth token, use default 'local'
   }, []);
 
   // Save machine selection to localStorage

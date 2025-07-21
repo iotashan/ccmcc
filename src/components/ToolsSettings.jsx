@@ -886,6 +886,7 @@ function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
                   value={newAllowedTool}
                   onChange={(e) => setNewAllowedTool(e.target.value)}
                   placeholder='e.g., "Bash(git log:*)" or "Write"'
+                  autoComplete="off"
                   onKeyPress={(e) => {
                     if (e.key === 'Enter') {
                       addAllowedTool(newAllowedTool);
@@ -967,6 +968,7 @@ function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
                   value={newDisallowedTool}
                   onChange={(e) => setNewDisallowedTool(e.target.value)}
                   placeholder='e.g., "Bash(rm:*)" or "Write"'
+                  autoComplete="off"
                   onKeyPress={(e) => {
                     if (e.key === 'Enter') {
                       addDisallowedTool(newDisallowedTool);
@@ -1252,6 +1254,7 @@ function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
                             setMcpConfigTested(false);
                           }}
                           placeholder="my-server"
+                          autoComplete="off"
                           required
                         />
                       </div>
@@ -1289,6 +1292,7 @@ function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
                             value={mcpFormData.config.command}
                             onChange={(e) => updateMcpConfig('command', e.target.value)}
                             placeholder="/path/to/mcp-server"
+                            autoComplete="off"
                             required
                           />
                         </div>
@@ -1303,6 +1307,7 @@ function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                             rows="3"
                             placeholder="--api-key&#10;abc123"
+                            autoComplete="off"
                           />
                         </div>
                       </div>
@@ -1318,6 +1323,7 @@ function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
                           onChange={(e) => updateMcpConfig('url', e.target.value)}
                           placeholder="https://api.example.com/mcp"
                           type="url"
+                          autoComplete="off"
                           required
                         />
                       </div>
@@ -1343,6 +1349,7 @@ function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                         rows="3"
                         placeholder="API_KEY=your-key&#10;DEBUG=true"
+                        autoComplete="off"
                       />
                     </div>
 
@@ -1366,6 +1373,7 @@ function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
                           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                           rows="3"
                           placeholder="Authorization=Bearer token&#10;X-API-Key=your-key"
+                          autoComplete="off"
                         />
                       </div>
                     )}
@@ -1691,6 +1699,7 @@ CLAUDE_CODE_UI_ENCRYPTION_KEY=${serverInfo?.encryptionKey || 'encryption-key-wil
                   onChange={(e) => setNewTokenName(e.target.value)}
                   placeholder="e.g., Remote Desktop, Laptop, etc."
                   className="w-full"
+                  autoComplete="off"
                   onKeyPress={(e) => e.key === 'Enter' && createApiToken()}
                 />
               </div>

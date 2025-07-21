@@ -2,6 +2,8 @@ import { promises as fs } from 'fs';
 import fsSync from 'fs';
 import path from 'path';
 import readline from 'readline';
+import { generateDisplayName, encodeProjectPath, decodeProjectName } from '../shared/utils/projects.js';
+import { getClaudeProjectsPath, getClaudeConfigPath } from '../shared/utils/config.js';
 
 // Cache for extracted project directories
 const projectDirectoryCache = new Map();
@@ -15,7 +17,7 @@ function clearProjectDirectoryCache() {
 
 // Load project configuration file
 async function loadProjectConfig() {
-  const configPath = path.join(process.env.HOME, '.claude', 'project-config.json');
+  const configPath = getClaudeConfigPath();
   try {
     const configData = await fs.readFile(configPath, 'utf8');
     return JSON.parse(configData);
@@ -27,43 +29,10 @@ async function loadProjectConfig() {
 
 // Save project configuration file
 async function saveProjectConfig(config) {
-  const configPath = path.join(process.env.HOME, '.claude', 'project-config.json');
+  const configPath = getClaudeConfigPath();
   await fs.writeFile(configPath, JSON.stringify(config, null, 2), 'utf8');
 }
 
-// Generate better display name from path
-async function generateDisplayName(projectName, actualProjectDir = null) {
-  // Use actual project directory if provided, otherwise decode from project name
-  let projectPath = actualProjectDir || projectName.replace(/-/g, '/');
-  
-  // Try to read package.json from the project path
-  try {
-    const packageJsonPath = path.join(projectPath, 'package.json');
-    const packageData = await fs.readFile(packageJsonPath, 'utf8');
-    const packageJson = JSON.parse(packageData);
-    
-    // Return the name from package.json if it exists
-    if (packageJson.name) {
-      return packageJson.name;
-    }
-  } catch (error) {
-    // Fall back to path-based naming if package.json doesn't exist or can't be read
-  }
-  
-  // If it starts with /, it's an absolute path
-  if (projectPath.startsWith('/')) {
-    const parts = projectPath.split('/').filter(Boolean);
-    if (parts.length > 3) {
-      // Show last 2 folders with ellipsis: "...projects/myapp"
-      return `.../${parts.slice(-2).join('/')}`;
-    } else {
-      // Show full path if short: "/home/user"
-      return projectPath;
-    }
-  }
-  
-  return projectPath;
-}
 
 // Extract the actual project directory from JSONL sessions (with caching)
 async function extractProjectDirectory(projectName) {
@@ -73,7 +42,7 @@ async function extractProjectDirectory(projectName) {
   }
   
   
-  const projectDir = path.join(process.env.HOME, '.claude', 'projects', projectName);
+  const projectDir = path.join(getClaudeProjectsPath(), projectName);
   const cwdCounts = new Map();
   let latestTimestamp = 0;
   let latestCwd = null;
@@ -85,7 +54,7 @@ async function extractProjectDirectory(projectName) {
     
     if (jsonlFiles.length === 0) {
       // Fall back to decoded project name if no sessions
-      extractedPath = projectName.replace(/-/g, '/');
+      extractedPath = decodeProjectName(projectName);
     } else {
       // Process all JSONL files to collect cwd values
       for (const file of jsonlFiles) {
@@ -122,7 +91,7 @@ async function extractProjectDirectory(projectName) {
       // Determine the best cwd to use
       if (cwdCounts.size === 0) {
         // No cwd found, fall back to decoded project name
-        extractedPath = projectName.replace(/-/g, '/');
+        extractedPath = decodeProjectName(projectName);
       } else if (cwdCounts.size === 1) {
         // Only one cwd, use it
         extractedPath = Array.from(cwdCounts.keys())[0];
@@ -146,7 +115,7 @@ async function extractProjectDirectory(projectName) {
         
         // Fallback (shouldn't reach here)
         if (!extractedPath) {
-          extractedPath = latestCwd || projectName.replace(/-/g, '/');
+          extractedPath = latestCwd || decodeProjectName(projectName);
         }
       }
     }
@@ -159,7 +128,7 @@ async function extractProjectDirectory(projectName) {
   } catch (error) {
     console.error(`Error extracting project directory for ${projectName}:`, error);
     // Fall back to decoded project name
-    extractedPath = projectName.replace(/-/g, '/');
+    extractedPath = decodeProjectName(projectName);
     
     // Cache the fallback result too
     projectDirectoryCache.set(projectName, extractedPath);
@@ -169,7 +138,7 @@ async function extractProjectDirectory(projectName) {
 }
 
 async function getProjects() {
-  const claudeDir = path.join(process.env.HOME, '.claude', 'projects');
+  const claudeDir = getClaudeProjectsPath();
   const config = await loadProjectConfig();
   const projects = [];
   const existingProjects = new Set();
@@ -230,7 +199,7 @@ async function getProjects() {
           actualProjectDir = await extractProjectDirectory(projectName);
         } catch (error) {
           // Fall back to decoded project name
-          actualProjectDir = projectName.replace(/-/g, '/');
+          actualProjectDir = decodeProjectName(projectName);
         }
       }
       
@@ -252,7 +221,7 @@ async function getProjects() {
 }
 
 async function getSessions(projectName, limit = 5, offset = 0) {
-  const projectDir = path.join(process.env.HOME, '.claude', 'projects', projectName);
+  const projectDir = path.join(getClaudeProjectsPath(), projectName);
   
   try {
     const files = await fs.readdir(projectDir);
@@ -392,7 +361,7 @@ async function parseJsonlSessions(filePath) {
 
 // Get messages for a specific session
 async function getSessionMessages(projectName, sessionId) {
-  const projectDir = path.join(process.env.HOME, '.claude', 'projects', projectName);
+  const projectDir = path.join(getClaudeProjectsPath(), projectName);
   
   try {
     const files = await fs.readdir(projectDir);
@@ -457,7 +426,7 @@ async function renameProject(projectName, newDisplayName) {
 
 // Delete a session from a project
 async function deleteSession(projectName, sessionId) {
-  const projectDir = path.join(process.env.HOME, '.claude', 'projects', projectName);
+  const projectDir = path.join(getClaudeProjectsPath(), projectName);
   
   try {
     const files = await fs.readdir(projectDir);
@@ -520,7 +489,7 @@ async function isProjectEmpty(projectName) {
 
 // Delete an empty project
 async function deleteProject(projectName) {
-  const projectDir = path.join(process.env.HOME, '.claude', 'projects', projectName);
+  const projectDir = path.join(getClaudeProjectsPath(), projectName);
   
   try {
     // First check if the project is empty
@@ -556,11 +525,11 @@ async function addProjectManually(projectPath, displayName = null) {
   }
   
   // Generate project name (encode path for use as directory name)
-  const projectName = absolutePath.replace(/\//g, '-');
+  const projectName = encodeProjectPath(absolutePath);
   
   // Check if project already exists in config or as a folder
   const config = await loadProjectConfig();
-  const projectDir = path.join(process.env.HOME, '.claude', 'projects', projectName);
+  const projectDir = path.join(getClaudeProjectsPath(), projectName);
   
   try {
     await fs.access(projectDir);

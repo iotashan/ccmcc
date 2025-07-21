@@ -2,12 +2,18 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import { ClientMessageTypes } from '../../../shared/protocol.js';
+import { generateDisplayName, encodeProjectPath, decodeProjectName } from '../../../shared/utils/projects.js';
 
 export class ProjectsHandler {
   constructor(connection, logger) {
     this.connection = connection;
     this.logger = logger;
     this.claudeProjectsPath = path.join(os.homedir(), '.claude', 'projects');
+  }
+
+  // Use shared generateDisplayName utility
+  async generateDisplayName(projectName, actualProjectPath = null) {
+    return await generateDisplayName(projectName, actualProjectPath);
   }
 
   async handle(message) {
@@ -44,36 +50,35 @@ export class ProjectsHandler {
           const projectPath = path.join(this.claudeProjectsPath, projectName);
           
           try {
-            // Read project metadata if available
-            const metadataPath = path.join(projectPath, '.claude', 'project.json');
-            let displayName = projectName;
-            
-            try {
-              const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf8'));
-              displayName = metadata.displayName || projectName;
-            } catch (e) {
-              // No metadata file, use directory name
-            }
-            
-            // Get project stats
-            const stats = await fs.stat(projectPath);
-            
-            // Decode the actual project path from the encoded directory name
+            // Decode the actual project path from the encoded directory name first
             let actualProjectPath = projectPath;
             // The project name is the encoded path - decode it
             if (projectName.startsWith('-')) {
               // Replace - with / to get the actual path
-              actualProjectPath = projectName.replace(/-/g, '/');
+              actualProjectPath = decodeProjectName(projectName);
               // Handle Windows paths (e.g., -C-Users-...)
               if (actualProjectPath.match(/^\/[A-Z]\//) && process.platform === 'win32') {
                 // Convert /C/Users/... to C:/Users/...
                 actualProjectPath = actualProjectPath.substring(1, 2) + ':' + actualProjectPath.substring(2);
               }
-              // Use the decoded path as the display name if no custom display name was set
-              if (displayName === projectName) {
-                displayName = actualProjectPath;
-              }
             }
+            
+            // Generate display name similar to server logic
+            let displayName = await this.generateDisplayName(projectName, actualProjectPath);
+            
+            // Read project metadata if available to get custom display name
+            const metadataPath = path.join(projectPath, '.claude', 'project.json');
+            try {
+              const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf8'));
+              if (metadata.displayName) {
+                displayName = metadata.displayName;
+              }
+            } catch (e) {
+              // No metadata file, use generated display name
+            }
+            
+            // Get project stats
+            const stats = await fs.stat(projectPath);
             
             projects.push({
               name: projectName,

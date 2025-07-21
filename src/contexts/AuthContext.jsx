@@ -130,6 +130,8 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
     setUser(null);
     localStorage.removeItem('auth-token');
+    // Clear lastAuthToken to ensure next login always starts with Local Machine
+    localStorage.removeItem('lastAuthToken');
     
     // Optional: Call logout endpoint for logging
     if (token) {

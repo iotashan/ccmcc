@@ -4,6 +4,7 @@ import { GitHandler } from './git.js';
 import fs from 'fs/promises';
 import path from 'path';
 import { getFileTree as getSharedFileTree, handleFileError, fileExists } from '../../../shared/utils/files.js';
+import { decodeProjectName, encodeProjectPath } from '../../../shared/utils/projects.js';
 
 export class ApiHandler {
   constructor(connection, logger) {
@@ -97,7 +98,7 @@ export class ApiHandler {
         const projectName = decodeURIComponent(matches[1]);
         
         // Decode the project name to get the actual path
-        const actualPath = projectName.replace(/-/g, '/');
+        const actualPath = decodeProjectName(projectName);
         
         try {
           // Get file tree (similar to server implementation)
@@ -131,7 +132,7 @@ export class ApiHandler {
             await fs.access(projectPath);
             
             // Generate project name (encode path)
-            const projectName = projectPath.replace(/\//g, '-');
+            const projectName = encodeProjectPath(projectPath);
             
             responseData = {
               success: true,

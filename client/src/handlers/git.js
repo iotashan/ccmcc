@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import path from 'path';
 import { promises as fs } from 'fs';
 import { ClientMessageTypes } from '../../../shared/protocol.js';
+import { decodeProjectName } from '../../../shared/utils/projects.js';
 import {
   getCurrentBranch,
   validateGitRepository,
@@ -100,7 +101,7 @@ export class GitHandler {
     // Decode the actual project path from the encoded directory name
     if (projectName.startsWith('-')) {
       // Replace - with / to get the actual path
-      let actualPath = projectName.replace(/-/g, '/');
+      let actualPath = decodeProjectName(projectName);
       // Handle Windows paths (e.g., -C-Users-...)
       if (actualPath.match(/^\/[A-Z]\//) && process.platform === 'win32') {
         // Convert /C/Users/... to C:/Users/...

@@ -154,7 +154,7 @@ const MessageInput = ({
         )}
 
         {/* Input form */}
-        <form onSubmit={handleSubmit} className="relative">
+        <form onSubmit={handleSubmit} className="relative" autoComplete="off">
           <div className="relative">
             <textarea
               ref={textareaRef}
@@ -194,6 +194,7 @@ const MessageInput = ({
                     }}
                     placeholder="Search files..."
                     className="w-full px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm focus:outline-none"
+                    autoComplete="off"
                     autoFocus
                   />
                 </div>

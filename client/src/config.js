@@ -3,6 +3,14 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import os from 'os';
 import fs from 'fs';
+import { 
+  getServerAddress, 
+  getClientName, 
+  getAPIToken, 
+  isDebugEnabled,
+  parseCommandLineArgs as parseArgs,
+  mergeConfig as merge
+} from '../../shared/utils/config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -50,26 +58,13 @@ export function saveAuthToken(token) {
   }
 }
 
-// Get local IP address
-function getLocalIPAddress() {
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
-      }
-    }
-  }
-  return '127.0.0.1';
-}
-
 export const config = {
   // Server connection settings
-  serverAddress: process.env.CLAUDE_CODE_UI_SERVER_ADDRESS || 'ws://localhost:3000',
-  clientName: process.env.CLAUDE_CODE_UI_CLIENT_NAME || getLocalIPAddress(),
+  serverAddress: getServerAddress(),
+  clientName: getClientName(),
   
   // Authentication
-  authToken: process.env.CLAUDE_CODE_UI_API_TOKEN || null,
+  authToken: getAPIToken(),
   
   // Connection settings
   reconnectInterval: 5000, // 5 seconds
@@ -77,7 +72,7 @@ export const config = {
   maxReconnectAttempts: 10,
   
   // Logging
-  debug: process.env.DEBUG === 'true',
+  debug: isDebugEnabled(),
   
   // Capabilities
   capabilities: [
@@ -88,40 +83,6 @@ export const config = {
   ]
 };
 
-// Parse command line arguments
-export function parseCommandLineArgs(args) {
-  const options = {};
-  
-  // Parse server address
-  const serverIndex = args.indexOf('--server');
-  if (serverIndex > -1 && args[serverIndex + 1]) {
-    options.serverAddress = args[serverIndex + 1];
-  }
-  
-  // Parse client name
-  const nameIndex = args.indexOf('--name');
-  if (nameIndex > -1 && args[nameIndex + 1]) {
-    options.clientName = args[nameIndex + 1];
-  }
-  
-  // Parse auth token
-  const tokenIndex = args.indexOf('--token');
-  if (tokenIndex > -1 && args[tokenIndex + 1]) {
-    options.authToken = args[tokenIndex + 1];
-  }
-  
-  // Parse debug flag
-  if (args.includes('--debug')) {
-    options.debug = true;
-  }
-  
-  return options;
-}
-
-// Merge configurations with priority: CLI args > env vars > defaults
-export function mergeConfig(cliOptions) {
-  return {
-    ...config,
-    ...cliOptions
-  };
-}
+// Use shared command line parsing and config merging
+export const parseCommandLineArgs = parseArgs;
+export const mergeConfig = merge;

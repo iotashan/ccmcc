@@ -57,7 +57,7 @@ const SetupForm = () => {
           </div>
 
           {/* Setup Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" autoComplete="on">
             <div>
               <label htmlFor="username" className="block text-sm font-medium text-foreground mb-1">
                 Username
@@ -65,6 +65,8 @@ const SetupForm = () => {
               <input
                 type="text"
                 id="username"
+                name="username"
+                autoComplete="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -81,6 +83,8 @@ const SetupForm = () => {
               <input
                 type="password"
                 id="password"
+                name="new-password"
+                autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -97,6 +101,8 @@ const SetupForm = () => {
               <input
                 type="password"
                 id="confirmPassword"
+                name="confirm-password"
+                autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
