@@ -86,6 +86,10 @@ function AppContent() {
     const saved = localStorage.getItem('autoScrollToBottom');
     return saved !== null ? JSON.parse(saved) : true;
   });
+  const [sendByCtrlEnter, setSendByCtrlEnter] = useState(() => {
+    const saved = localStorage.getItem('sendByCtrlEnter');
+    return saved !== null ? JSON.parse(saved) : false;
+  });
   // Session Protection System: Track sessions with active conversations to prevent
   // automatic project updates from interrupting ongoing chats. When a user sends
   // a message, the session is marked as "active" and project updates are paused
@@ -655,7 +659,11 @@ function AppContent() {
           autoExpandTools={autoExpandTools}
           showRawParameters={showRawParameters}
           autoScrollToBottom={autoScrollToBottom}
+<<<<<<< HEAD
           selectedMachine={selectedMachine}
+=======
+          sendByCtrlEnter={sendByCtrlEnter}
+>>>>>>> 7f4feb1 (feat: add ctrl+enter send option & fix IME problen (#62))
         />
       </div>
 
@@ -686,6 +694,11 @@ function AppContent() {
           onAutoScrollChange={(value) => {
             setAutoScrollToBottom(value);
             localStorage.setItem('autoScrollToBottom', JSON.stringify(value));
+          }}
+          sendByCtrlEnter={sendByCtrlEnter}
+          onSendByCtrlEnterChange={(value) => {
+            setSendByCtrlEnter(value);
+            localStorage.setItem('sendByCtrlEnter', JSON.stringify(value));
           }}
           isMobile={isMobile}
         />
