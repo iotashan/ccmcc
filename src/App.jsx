@@ -523,7 +523,7 @@ function AppContent() {
               </code>
             </div>
             <p className="text-xs text-gray-600 dark:text-gray-400">
-              Run this command in your Claude Code UI directory to update to the latest version.
+              Run this command in your CCMCC directory to update to the latest version.
             </p>
           </div>
 
