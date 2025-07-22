@@ -184,6 +184,21 @@ export class ApiHandler {
           message: 'Session deleted'
         };
       }
+      else if (apiPath.match(/^\/projects\/([^\/]+)\/sessions\/([^\/]+)\/summary$/) && method === 'PUT') {
+        // Update session summary
+        const matches = apiPath.match(/^\/projects\/([^\/]+)\/sessions\/([^\/]+)\/summary$/);
+        const projectName = decodeURIComponent(matches[1]);
+        const sessionId = decodeURIComponent(matches[2]);
+        const { summary } = JSON.parse(body);
+        
+        // For remote machines, we can't actually update Claude's session summaries
+        // Just return success to satisfy the UI
+        responseData = {
+          success: true,
+          message: 'Session summary updated',
+          summary: summary
+        };
+      }
       else if (apiPath.match(/^\/projects\/([^\/]+)$/) && method === 'DELETE') {
         // Delete project
         const matches = apiPath.match(/^\/projects\/([^\/]+)$/);

@@ -327,8 +327,18 @@ async function parseJsonlSessions(filePath) {
               // Use first user message as summary if no summary entry exists
               const content = entry.message.content;
               if (typeof content === 'string' && content.length > 0) {
-                // Skip command messages that start with <command-name>
-                if (!content.startsWith('<command-name>')) {
+                // Skip command messages and system-like messages
+                const lowerContent = content.toLowerCase();
+                const isSystemMessage = content.startsWith('<command-name>') ||
+                                       content.startsWith('Caveat:') ||
+                                       content.startsWith('Warning:') ||
+                                       content.startsWith('Note:') ||
+                                       content.startsWith('System:') ||
+                                       content.includes('messages below were generated') ||
+                                       content.includes('this conversation was') ||
+                                       content.includes('this session was');
+                
+                if (!isSystemMessage) {
                   session.summary = content.length > 50 ? content.substring(0, 50) + '...' : content;
                 }
               }
@@ -513,6 +523,87 @@ async function deleteProject(projectName) {
   }
 }
 
+// Update session summary
+async function updateSessionSummary(projectName, sessionId, summary) {
+  const projectDir = path.join(getClaudeProjectsPath(), projectName);
+  
+  try {
+    const files = await fs.readdir(projectDir);
+    const jsonlFiles = files.filter(file => file.endsWith('.jsonl'));
+    
+    if (jsonlFiles.length === 0) {
+      throw new Error('No session files found for this project');
+    }
+    
+    // Check all JSONL files to find which one contains the session
+    for (const file of jsonlFiles) {
+      const jsonlFile = path.join(projectDir, file);
+      const content = await fs.readFile(jsonlFile, 'utf8');
+      const lines = content.split('\n').filter(line => line.trim());
+      
+      // Check if this file contains the session
+      const hasSession = lines.some(line => {
+        try {
+          const data = JSON.parse(line);
+          return data.sessionId === sessionId;
+        } catch {
+          return false;
+        }
+      });
+      
+      if (hasSession) {
+        // Check if a summary entry already exists
+        const summaryExists = lines.some(line => {
+          try {
+            const data = JSON.parse(line);
+            return data.sessionId === sessionId && data.type === 'summary';
+          } catch {
+            return false;
+          }
+        });
+        
+        if (summaryExists) {
+          // Update existing summary entry
+          const updatedLines = lines.map(line => {
+            try {
+              const data = JSON.parse(line);
+              if (data.sessionId === sessionId && data.type === 'summary') {
+                data.summary = summary;
+                data.timestamp = new Date().toISOString();
+                return JSON.stringify(data);
+              }
+              return line;
+            } catch {
+              return line;
+            }
+          });
+          
+          // Write back the updated content
+          await fs.writeFile(jsonlFile, updatedLines.join('\n') + '\n');
+        } else {
+          // Add new summary entry
+          const summaryEntry = {
+            sessionId: sessionId,
+            type: 'summary',
+            summary: summary,
+            timestamp: new Date().toISOString()
+          };
+          
+          // Append the summary entry to the file
+          await fs.appendFile(jsonlFile, JSON.stringify(summaryEntry) + '\n');
+        }
+        
+        return true;
+      }
+    }
+    
+    throw new Error(`Session ${sessionId} not found in any files`);
+  } catch (error) {
+    console.error(`Error updating session summary for ${sessionId} in project ${projectName}:`, error);
+    throw error;
+  }
+}
+
 // Add a project manually to the config (without creating folders)
 async function addProjectManually(projectPath, displayName = null) {
   const absolutePath = path.resolve(projectPath);
@@ -575,6 +666,7 @@ export {
   parseJsonlSessions,
   renameProject,
   deleteSession,
+  updateSessionSummary,
   isProjectEmpty,
   deleteProject,
   addProjectManually,

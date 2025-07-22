@@ -37,7 +37,7 @@ import fetch from 'node-fetch';
 import mime from 'mime-types';
 import crypto from 'crypto';
 
-import { getProjects, getSessions, getSessionMessages, renameProject, deleteSession, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache } from './projects.js';
+import { getProjects, getSessions, getSessionMessages, renameProject, deleteSession, updateSessionSummary, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache } from './projects.js';
 import { spawnClaude, abortClaudeSession } from './claude-cli.js';
 import gitRoutes from './routes/git.js';
 import authRoutes from './routes/auth.js';
@@ -467,6 +467,23 @@ app.delete('/api/projects/:projectName/sessions/:sessionId', authenticateToken, 
     const { projectName, sessionId } = req.params;
     await deleteSession(projectName, sessionId);
     res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update session summary endpoint
+app.put('/api/projects/:projectName/sessions/:sessionId/summary', authenticateToken, async (req, res) => {
+  try {
+    const { projectName, sessionId } = req.params;
+    const { summary } = req.body;
+    
+    if (!summary || !summary.trim()) {
+      return res.status(400).json({ error: 'Summary is required' });
+    }
+    
+    await updateSessionSummary(projectName, sessionId, summary.trim());
+    res.json({ success: true, summary: summary.trim() });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
