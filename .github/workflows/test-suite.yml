@@ -1,0 +1,218 @@
+name: Test Suite
+
+on:
+  push:
+    branches: [main, develop, 'feature/*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Type of tests to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - unit
+          - integration
+          - e2e
+
+env:
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      with:
+        install: true
+        driver-opts: network=host
+      
+    - name: Cache Docker layers
+      uses: actions/cache@v3
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-
+    
+    - name: Create .env.test from secrets
+      run: |
+        cp .env.test.example .env.test
+        echo "JWT_SECRET=${{ secrets.TEST_JWT_SECRET }}" >> .env.test
+        echo "CLIENT_API_TOKEN=${{ secrets.TEST_API_TOKEN }}" >> .env.test
+        echo "CLAUDE_API_KEY=${{ secrets.TEST_CLAUDE_API_KEY }}" >> .env.test
+        echo "TEST_USER_PASSWORD=${{ secrets.TEST_USER_PASSWORD }}" >> .env.test
+    
+    - name: Build Docker images
+      run: |
+        docker-compose -f docker-compose.test.yml build \
+          --build-arg BUILDKIT_INLINE_CACHE=1 \
+          --cache-from type=local,src=/tmp/.buildx-cache \
+          --cache-to type=local,dest=/tmp/.buildx-cache-new,mode=max
+    
+    - name: Move Docker cache
+      run: |
+        rm -rf /tmp/.buildx-cache
+        mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+    
+    - name: Start test environment
+      run: |
+        docker-compose -f docker-compose.test.yml up -d server client test-data-generator
+        
+        # Wait for services to be healthy
+        echo "Waiting for services to be ready..."
+        docker-compose -f docker-compose.test.yml run --rm test-runner sh -c "
+          until curl -f http://server:3020/health; do
+            echo 'Waiting for server...'
+            sleep 2
+          done
+        "
+    
+    - name: Run test suite
+      run: |
+        TEST_TYPE="${{ github.event.inputs.test_type || 'all' }}"
+        echo "Running $TEST_TYPE tests..."
+        
+        if [ "$TEST_TYPE" = "all" ]; then
+          docker-compose -f docker-compose.test.yml run --rm test-runner npm run test:all
+        else
+          docker-compose -f docker-compose.test.yml run --rm test-runner npm run test:$TEST_TYPE
+        fi
+    
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results-${{ github.run_id }}
+        path: |
+          test-results/
+          !test-results/node_modules/
+        retention-days: 7
+    
+    - name: Upload coverage reports
+      if: always()
+      uses: codecov/codecov-action@v3
+      with:
+        directory: ./test-results/coverage
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+    
+    - name: Upload Playwright report
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: playwright-report-${{ github.run_id }}
+        path: test-results/playwright-report/
+        retention-days: 7
+    
+    - name: Publish test results
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      if: always()
+      with:
+        files: |
+          test-results/junit.xml
+          test-results/report.json
+    
+    - name: Docker logs on failure
+      if: failure()
+      run: |
+        echo "=== Server logs ==="
+        docker-compose -f docker-compose.test.yml logs server
+        echo "=== Client logs ==="
+        docker-compose -f docker-compose.test.yml logs client
+        echo "=== Test runner logs ==="
+        docker-compose -f docker-compose.test.yml logs test-runner
+    
+    - name: Cleanup
+      if: always()
+      run: |
+        docker-compose -f docker-compose.test.yml down -v
+        docker volume prune -f
+
+  multi-machine-test:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    timeout-minutes: 20
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Create .env.test
+      run: |
+        cp .env.test.example .env.test
+        echo "JWT_SECRET=${{ secrets.TEST_JWT_SECRET }}" >> .env.test
+        echo "CLIENT_API_TOKEN_1=${{ secrets.TEST_API_TOKEN_1 }}" >> .env.test
+        echo "CLIENT_API_TOKEN_2=${{ secrets.TEST_API_TOKEN_2 }}" >> .env.test
+    
+    - name: Run multi-machine tests
+      run: |
+        docker-compose -f docker-compose.multi-machine.yml up --build --abort-on-container-exit
+    
+    - name: Upload multi-machine test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: multi-machine-test-results-${{ github.run_id }}
+        path: test-results/
+        retention-days: 7
+
+  performance-test:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 15
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Run performance tests
+      run: |
+        docker-compose -f docker-compose.test.yml run --rm test-runner npm run test:performance
+    
+    - name: Upload performance results
+      uses: actions/upload-artifact@v3
+      with:
+        name: performance-results-${{ github.run_id }}
+        path: test-results/performance/
+        retention-days: 30
+    
+    - name: Comment PR with performance results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const perfResults = fs.readFileSync('test-results/performance/summary.json', 'utf8');
+          const data = JSON.parse(perfResults);
+          
+          const comment = `## Performance Test Results
+          
+          | Metric | Value | Change |
+          |--------|-------|--------|
+          | Page Load Time | ${data.pageLoadTime}ms | ${data.pageLoadChange} |
+          | API Response Time | ${data.apiResponseTime}ms | ${data.apiResponseChange} |
+          | Memory Usage | ${data.memoryUsage}MB | ${data.memoryChange} |
+          `;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });
