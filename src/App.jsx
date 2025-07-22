@@ -429,6 +429,43 @@ function AppContent() {
     );
   };
 
+  const handleUpdateSessionSummary = async (projectName, sessionId, newSummary) => {
+    try {
+      const response = await api.updateSessionSummary(projectName, sessionId, newSummary);
+      
+      if (response.ok) {
+        // Update local state to reflect the change
+        setProjects(prevProjects => 
+          prevProjects.map(project => {
+            if (project.name === projectName) {
+              return {
+                ...project,
+                sessions: project.sessions?.map(session => 
+                  session.id === sessionId 
+                    ? { ...session, summary: newSummary }
+                    : session
+                ) || []
+              };
+            }
+            return project;
+          })
+        );
+        
+        // Update selected session if it's the one being edited
+        if (selectedSession?.id === sessionId) {
+          setSelectedSession(prev => ({ ...prev, summary: newSummary }));
+        }
+        
+        // Trigger project refresh to sync with server
+        if (window.refreshProjects) {
+          window.refreshProjects();
+        }
+      }
+    } catch (error) {
+      console.error('Error updating session summary:', error);
+    }
+  };
+
   // Session Protection Functions: Manage the lifecycle of active sessions
   
   // markSessionAsActive: Called when user sends a message to mark session as protected
@@ -656,6 +693,7 @@ function AppContent() {
           onReplaceTemporarySession={replaceTemporarySession}
           onNavigateToSession={(sessionId) => navigate(`/session/${sessionId}`)}
           onShowSettings={() => setShowToolsSettings(true)}
+          onUpdateSessionSummary={handleUpdateSessionSummary}
           autoExpandTools={autoExpandTools}
           showRawParameters={showRawParameters}
           autoScrollToBottom={autoScrollToBottom}

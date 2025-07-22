@@ -161,7 +161,8 @@ function ChatInterface({
   onSessionInactive, 
   onReplaceTemporarySession, 
   onNavigateToSession, 
-  onShowSettings, 
+  onShowSettings,
+  onUpdateSessionSummary, 
   autoExpandTools, 
   showRawParameters, 
   autoScrollToBottom, 
@@ -191,6 +192,8 @@ function ChatInterface({
   const [uploadingImages, setUploadingImages] = useState(new Map());
   const [imageErrors, setImageErrors] = useState(new Map());
   const [projectFiles, setProjectFiles] = useState([]);
+  const [isEditingSessionName, setIsEditingSessionName] = useState(false);
+  const [editedSessionName, setEditedSessionName] = useState('');
   
   const scrollContainerRef = useRef(null);
   const tempSessionIdRef = useRef(null);
@@ -517,9 +520,74 @@ function ChatInterface({
               {selectedProject ? selectedProject.name : 'Select a Project'}
             </h2>
             {selectedSession && (
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Session: {selectedSession.name}
-              </p>
+              <div className="flex items-center gap-2">
+                {isEditingSessionName ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="text"
+                      value={editedSessionName}
+                      onChange={(e) => setEditedSessionName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && onUpdateSessionSummary) {
+                          onUpdateSessionSummary(selectedProject.name, selectedSession.id, editedSessionName);
+                          setIsEditingSessionName(false);
+                        } else if (e.key === 'Escape') {
+                          setIsEditingSessionName(false);
+                          setEditedSessionName(selectedSession.summary || 'New Session');
+                        }
+                      }}
+                      className="px-2 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => {
+                        if (onUpdateSessionSummary) {
+                          onUpdateSessionSummary(selectedProject.name, selectedSession.id, editedSessionName);
+                        }
+                        setIsEditingSessionName(false);
+                      }}
+                      className="p-1 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/40 rounded"
+                      title="Save"
+                    >
+                      <svg className="w-3 h-3 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsEditingSessionName(false);
+                        setEditedSessionName(selectedSession.summary || 'New Session');
+                      }}
+                      className="p-1 bg-gray-50 hover:bg-gray-100 dark:bg-gray-900/20 dark:hover:bg-gray-900/40 rounded"
+                      title="Cancel"
+                    >
+                      <svg className="w-3 h-3 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Session: {selectedSession.summary || 'New Session'}
+                    </p>
+                    {onUpdateSessionSummary && (
+                      <button
+                        onClick={() => {
+                          setIsEditingSessionName(true);
+                          setEditedSessionName(selectedSession.summary || 'New Session');
+                        }}
+                        className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                        title="Edit session name"
+                      >
+                        <svg className="w-3 h-3 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

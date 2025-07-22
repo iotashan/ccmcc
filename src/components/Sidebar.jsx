@@ -10,6 +10,7 @@ import ClaudeLogo from './ClaudeLogo';
 import MachineSelector from './MachineSelector';
 import { api } from '../utils/api';
 import { TEST_IDS } from '../utils/testIds';
+import Tooltip from './Tooltip';
 
 // Move formatTimeAgo outside component to avoid recreation on every render
 const formatTimeAgo = (dateString, currentTime) => {
@@ -922,9 +923,11 @@ function Sidebar({
                                   if (e.key === 'Escape') cancelEditing();
                                 }}
                               />
-                              <div className="text-xs text-muted-foreground truncate" title={project.fullPath}>
-                                {project.fullPath}
-                              </div>
+                              <Tooltip content={project.fullPath}>
+                                <div className="text-xs text-muted-foreground truncate cursor-help">
+                                  {project.fullPath}
+                                </div>
+                              </Tooltip>
                             </div>
                           ) : (
                             <div>
@@ -943,9 +946,11 @@ function Sidebar({
                                   return hasMore && sessionCount >= 5 ? `${sessionCount}+` : sessionCount;
                                 })()}
                                 {project.fullPath && project.fullPath !== project.displayName && (
-                                  <span className="ml-1 opacity-60" title={project.fullPath}>
-                                    • {project.fullPath.length > 25 ? '...' + project.fullPath.slice(-22) : project.fullPath}
-                                  </span>
+                                  <Tooltip content={project.fullPath}>
+                                    <span className="ml-1 opacity-60 cursor-help">
+                                      • {project.fullPath.length > 25 ? '...' + project.fullPath.slice(-22) : project.fullPath}
+                                    </span>
+                                  </Tooltip>
                                 )}
                               </div>
                             </div>
