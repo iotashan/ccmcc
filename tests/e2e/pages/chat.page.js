@@ -205,4 +205,36 @@ export class ChatPage {
       el.scrollTop = 0;
     });
   }
+
+  // Additional helper methods for terminal output testing
+  async getLastResponse() {
+    // Get the last assistant message/response
+    const messages = await this.page.locator('[data-testid="message"][data-role="assistant"]').all();
+    if (messages.length === 0) return null;
+    return messages[messages.length - 1];
+  }
+
+  get lastResponse() {
+    // Property getter for the last response
+    return this.page.locator('[data-testid="message"][data-role="assistant"]').last();
+  }
+
+  async getAllMessages() {
+    // Get all messages in the chat
+    const messages = await this.page.locator('[data-testid="message"]').all();
+    const result = [];
+    
+    for (const message of messages) {
+      const role = await message.getAttribute('data-role');
+      const content = await message.textContent();
+      result.push({ role, content });
+    }
+    
+    return result;
+  }
+
+  async getAllAssistantResponses() {
+    // Get all assistant responses
+    return await this.page.locator('[data-testid="message"][data-role="assistant"]').all();
+  }
 }

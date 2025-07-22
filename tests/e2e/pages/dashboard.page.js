@@ -130,4 +130,50 @@ export class DashboardPage {
     await this.openNotifications();
     await this.page.click('[data-testid="clear-all-notifications"]');
   }
+
+  // Additional helper methods for test scenarios
+  async clickCreateProject() {
+    await this.newProjectButton.click();
+  }
+
+  async fillProjectForm(projectData) {
+    await this.page.fill('[data-testid="project-name-input"]', projectData.name);
+    if (projectData.description) {
+      await this.page.fill('[data-testid="project-description-input"]', projectData.description);
+    }
+    if (projectData.type) {
+      await this.page.selectOption('[data-testid="project-type-select"]', projectData.type);
+    }
+    if (projectData.template) {
+      await this.page.selectOption('[data-testid="project-template-select"]', projectData.template);
+    }
+  }
+
+  async submitProject() {
+    await this.page.click('[data-testid="create-project-button"]');
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  getProjectByName(name) {
+    return this.page.locator(`[data-testid="project-${name}"]`);
+  }
+
+  async clickProject(name) {
+    await this.getProjectByName(name).click();
+  }
+
+  async clickStartChat() {
+    await this.newSessionButton.click();
+    await this.page.waitForURL(/\/session\/.+/);
+  }
+
+  get recentSessions() {
+    return this.page.locator('[data-testid="recent-sessions"]');
+  }
+
+  async getLatestSessionTitle() {
+    await this.switchToTab('sessions');
+    const firstSession = this.sessionHistory.locator('.session-item').first();
+    return await firstSession.locator('[data-testid="session-title"]').textContent();
+  }
 }

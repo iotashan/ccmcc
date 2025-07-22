@@ -37,7 +37,7 @@ const ToolUseMessage = ({ message, autoExpandTools, showRawParameters }) => {
     
     if (typeof result === 'string') {
       // Check for bash output formatting
-      if (result.includes('<bash-input>') || result.includes('<bash-stdout>')) {
+      if (result.includes('<bash-input>') || result.includes('<bash-stdout>') || result.includes('<bash-stderr>')) {
         return formatBashTerminalOutput(result);
       }
       
@@ -81,6 +81,7 @@ const ToolUseMessage = ({ message, autoExpandTools, showRawParameters }) => {
     // Process bash-input tags (can be multi-line)
     const inputRegex = /<bash-input>([\s\S]*?)<\/bash-input>/g;
     const stdoutRegex = /<bash-stdout>([\s\S]*?)<\/bash-stdout>/g;
+    const stderrRegex = /<bash-stderr>([\s\S]*?)<\/bash-stderr>/g;
     
     // Collect all matches with their positions
     const matches = [];
@@ -98,6 +99,15 @@ const ToolUseMessage = ({ message, autoExpandTools, showRawParameters }) => {
     while ((match = stdoutRegex.exec(content)) !== null) {
       matches.push({
         type: 'stdout',
+        content: match[1],
+        index: match.index,
+        fullMatch: match[0]
+      });
+    }
+    
+    while ((match = stderrRegex.exec(content)) !== null) {
+      matches.push({
+        type: 'stderr',
         content: match[1],
         index: match.index,
         fullMatch: match[0]
@@ -132,6 +142,13 @@ const ToolUseMessage = ({ message, autoExpandTools, showRawParameters }) => {
         elements.push(
           <div key={`out-${elementKey++}`} className="font-mono text-gray-300 ml-6 whitespace-pre-wrap">
             {match.content}
+          </div>
+        );
+      } else if (match.type === 'stderr') {
+        // Show stderr even if empty, with red color
+        elements.push(
+          <div key={`err-${elementKey++}`} className="font-mono text-red-400 ml-6 whitespace-pre-wrap">
+            {match.content || ''}
           </div>
         );
       }
