@@ -1,0 +1,185 @@
+# Multi-stage Dockerfile for Claude Code UI Test Environment
+
+# Base stage with common dependencies
+FROM node:20-alpine AS base
+RUN apk add --no-cache \
+    git \
+    python3 \
+    py3-pip \
+    bash \
+    curl \
+    openssh-client \
+    ca-certificates \
+    chromium \
+    firefox-esr \
+    # Additional tools for testing
+    jq \
+    make \
+    gcc \
+    g++ \
+    libc-dev
+
+# Install global npm packages
+RUN npm install -g \
+    typescript \
+    ts-node \
+    nodemon \
+    pm2
+
+# Try to install Claude CLI (may not be available)
+RUN npm install -g claude-code-cli@latest || echo "Claude CLI not available"
+
+# Set up git config for test commits
+RUN git config --global user.email "test@claudecodeui.com" && \
+    git config --global user.name "Test User" && \
+    git config --global init.defaultBranch main
+
+# Create app directory
+WORKDIR /app
+
+# Test data generation stage
+FROM base AS test-data
+WORKDIR /test-data
+
+# Copy test data generation scripts
+COPY scripts/generate-test-data.sh scripts/
+COPY scripts/setup-claude-sessions.sh scripts/
+COPY scripts/generate-long-session.sh scripts/
+
+# Make scripts executable
+RUN chmod +x scripts/*.sh
+
+# Copy mock responses if they exist
+COPY test-data/mock-responses.json* ./
+
+# Run data generation (this will be cached)
+RUN ./scripts/generate-test-data.sh || echo "Test data generation will run at runtime"
+RUN ./scripts/setup-claude-sessions.sh || echo "Claude sessions setup will run at runtime"
+RUN ./scripts/generate-long-session.sh || echo "Long session generation will run at runtime"
+
+# Server stage
+FROM base AS server
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY server/package*.json ./server/
+COPY shared/package*.json ./shared/
+
+# Install dependencies
+RUN npm ci --only=production && \
+    cd server && npm ci --only=production || true && \
+    cd ../shared && npm ci --only=production || true
+
+# Copy server and shared code
+COPY server/ ./server/
+COPY shared/ ./shared/
+
+# Create data directory for SQLite
+RUN mkdir -p /data
+
+# Expose server port
+EXPOSE 3020
+
+# Health check
+HEALTHCHECK --interval=5s --timeout=3s --retries=5 \
+    CMD curl -f http://localhost:3020/health || exit 1
+
+# Start server
+CMD ["npm", "run", "server"]
+
+# Client stage
+FROM base AS client
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY client/package*.json ./client/
+COPY shared/package*.json ./shared/
+
+# Install dependencies
+RUN npm ci --only=production && \
+    cd client && npm ci --only=production || true && \
+    cd ../shared && npm ci --only=production || true
+
+# Copy client and shared code
+COPY client/ ./client/
+COPY shared/ ./shared/
+
+# Create necessary directories
+RUN mkdir -p /test-data/.claude/projects && \
+    mkdir -p /test-data/.claude/commands
+
+# Start client
+CMD ["npm", "run", "client"]
+
+# Test runner stage with Playwright
+FROM mcr.microsoft.com/playwright:v1.40.0-jammy AS test-runner
+
+# Install Node.js 20
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs
+
+# Install additional testing tools and build dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    jq \
+    curl \
+    build-essential \
+    python3 \
+    # Clean up
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up git config
+RUN git config --global user.email "test@claudecodeui.com" && \
+    git config --global user.name "Test User" && \
+    git config --global init.defaultBranch main
+
+WORKDIR /app
+
+# Copy entire project for testing
+COPY . .
+
+# Install all dependencies including dev
+RUN npm ci
+
+# Install Playwright browsers
+RUN npx playwright install --with-deps chromium firefox
+
+# Create directories for test results
+RUN mkdir -p /app/test-results/artifacts && \
+    mkdir -p /app/test-results/playwright-report && \
+    mkdir -p /app/tests/test-results
+RUN mkdir -p test-results/screenshots && \
+    mkdir -p test-results/videos && \
+    mkdir -p test-results/traces && \
+    mkdir -p test-results/coverage
+
+# Set environment for headless testing
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV CI=true
+
+# Default command runs all tests
+CMD ["npm", "run", "test:all"]
+
+# Development stage for local testing
+FROM base AS development
+WORKDIR /app
+
+# Copy everything
+COPY . .
+
+# Install all dependencies
+RUN npm ci
+
+# Install Playwright browsers
+RUN npx playwright install chromium firefox || echo "Playwright browsers will be installed at runtime"
+
+# Expose all ports
+EXPOSE 3020 3021 9229
+
+# Volume for live code updates
+VOLUME ["/app/server", "/app/client", "/app/tests", "/app/shared"]
+
+# Start with nodemon for auto-reload
+CMD ["npm", "run", "dev:all"]

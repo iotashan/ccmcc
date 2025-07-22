@@ -1,0 +1,199 @@
+version: '3.8'
+
+services:
+  # Server service - handles API and WebSocket connections
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      target: server
+    container_name: claudecodeui-test-server
+    environment:
+      - NODE_ENV=test
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-1h}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///data/test.db}
+      - DATABASE_LOG=${DATABASE_LOG:-false}
+      - PORT=${SERVER_PORT:-3020}
+      - SERVER_PORT=${SERVER_PORT:-3020}
+      - SERVER_HOST=${SERVER_HOST:-0.0.0.0}
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      - ENABLE_TEST_MODE=${ENABLE_TEST_MODE:-true}
+      - MOCK_CLAUDE_API=${MOCK_CLAUDE_API:-true}
+      - MOCK_CLAUDE_RESPONSES_PATH=${MOCK_CLAUDE_RESPONSES_PATH:-/test-data/mock-responses.json}
+    volumes:
+      - test-data:/test-data:ro
+      - server-data:/data
+      - ./server:/app/server:ro
+      - ./shared:/app/shared:ro
+    ports:
+      - "${SERVER_PORT:-3020}:3020"
+    networks:
+      - test-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3020/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # Client service - connects to server
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      target: client
+    container_name: claudecodeui-test-client
+    environment:
+      - NODE_ENV=test
+      - SERVER_URL=http://server:3020
+      - CLIENT_API_TOKEN=${CLIENT_API_TOKEN}
+      - CLIENT_PORT=${CLIENT_PORT:-3021}
+      - MACHINE_NAME=${MACHINE_NAME:-test-machine-1}
+      - TEST_USER_EMAIL=${TEST_USER_EMAIL:-testuser@example.com}
+      - TEST_USER_PASSWORD=${TEST_USER_PASSWORD:-testpass123}
+      - ENABLE_TEST_MODE=${ENABLE_TEST_MODE:-true}
+    volumes:
+      - test-data:/test-data
+      - claude-sessions:/test-data/.claude
+      - ./client:/app/client:ro
+      - ./shared:/app/shared:ro
+      - client-projects:/projects
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - test-net
+    restart: unless-stopped
+
+  # Test runner - executes all tests
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      target: test-runner
+    container_name: claudecodeui-test-runner
+    environment:
+      - NODE_ENV=test
+      - SERVER_URL=http://server:3020
+      - CLIENT_URL=http://client:3021
+      - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+      - CI=${CI:-true}
+      - TEST_TIMEOUT=${TEST_TIMEOUT:-30000}
+      - HEADLESS=${HEADLESS:-true}
+      # Test credentials
+      - TEST_USER_EMAIL=${TEST_USER_EMAIL:-testuser@example.com}
+      - TEST_USER_PASSWORD=${TEST_USER_PASSWORD:-testpass123}
+      - TEST_USER_USERNAME=${TEST_USER_USERNAME:-testuser}
+      - CLIENT_API_TOKEN=${CLIENT_API_TOKEN}
+      - JWT_SECRET=${JWT_SECRET}
+      # Test configuration
+      - RUN_UNIT_TESTS=${RUN_UNIT_TESTS:-true}
+      - RUN_INTEGRATION_TESTS=${RUN_INTEGRATION_TESTS:-true}
+      - RUN_E2E_TESTS=${RUN_E2E_TESTS:-true}
+      - GENERATE_COVERAGE=${GENERATE_COVERAGE:-true}
+    volumes:
+      - test-data:/test-data:ro
+      - ./tests:/app/tests:ro
+      - ./server:/app/server:ro
+      - ./client:/app/client:ro
+      - ./shared:/app/shared:ro
+      - test-results:/app/test-results
+      - coverage-data:/app/coverage
+      - playwright-cache:/ms-playwright
+    depends_on:
+      - server
+      - client
+    networks:
+      - test-net
+    command: >
+      sh -c "
+        echo 'Waiting for services to be ready...' &&
+        sleep 10 &&
+        echo 'Starting test execution...' &&
+        npm run test:all
+      "
+
+  # Test data generator (runs once to prepare data)
+  test-data-generator:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      target: test-data
+    container_name: claudecodeui-test-data-gen
+    volumes:
+      - test-data:/test-data
+    networks:
+      - test-net
+    command: >
+      sh -c "
+        echo 'Generating test data...' &&
+        cd /test-data &&
+        ./scripts/generate-test-data.sh &&
+        ./scripts/setup-claude-sessions.sh &&
+        ./scripts/generate-long-session.sh &&
+        echo 'Test data generation complete!'
+      "
+    profiles:
+      - setup
+
+# Networks
+networks:
+  test-net:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+
+# Volumes
+volumes:
+  test-data:
+    driver: local
+  server-data:
+    driver: local
+  claude-sessions:
+    driver: local
+  client-projects:
+    driver: local
+  test-results:
+    driver: local
+  coverage-data:
+    driver: local
+  playwright-cache:
+    driver: local
+
+# Extension fields for common configurations
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# Override configurations for different test scenarios
+x-test-overrides:
+  unit-only: &unit-tests
+    test-runner:
+      environment:
+        - RUN_UNIT_TESTS=true
+        - RUN_INTEGRATION_TESTS=false
+        - RUN_E2E_TESTS=false
+      command: npm run test:unit
+  
+  integration-only: &integration-tests
+    test-runner:
+      environment:
+        - RUN_UNIT_TESTS=false
+        - RUN_INTEGRATION_TESTS=true
+        - RUN_E2E_TESTS=false
+      command: npm run test:integration
+  
+  e2e-only: &e2e-tests
+    test-runner:
+      environment:
+        - RUN_UNIT_TESTS=false
+        - RUN_INTEGRATION_TESTS=false
+        - RUN_E2E_TESTS=true
+      command: npm run test:e2e

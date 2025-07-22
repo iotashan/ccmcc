@@ -1,0 +1,381 @@
+version: '3.8'
+
+services:
+  # Server service - handles API and WebSocket connections for multiple clients
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      target: server
+    container_name: claudecodeui-multi-server
+    environment:
+      - NODE_ENV=test
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-1h}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///data/test.db}
+      - DATABASE_LOG=${DATABASE_LOG:-false}
+      - SERVER_PORT=${SERVER_PORT:-3020}
+      - SERVER_HOST=${SERVER_HOST:-0.0.0.0}
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - LOG_FORMAT=${LOG_FORMAT:-json}
+      - ENABLE_TEST_MODE=${ENABLE_TEST_MODE:-true}
+      - MOCK_CLAUDE_API=${MOCK_CLAUDE_API:-true}
+      - MOCK_CLAUDE_RESPONSES_PATH=${MOCK_CLAUDE_RESPONSES_PATH:-/test-data/mock-responses.json}
+      # Multi-machine specific settings
+      - MULTI_MACHINE_MODE=true
+      - MAX_MACHINES_PER_USER=${MAX_MACHINES_PER_USER:-5}
+      - ENABLE_MACHINE_SWITCHING=${ENABLE_MACHINE_SWITCHING:-true}
+      - MACHINE_STATUS_INTERVAL=${MACHINE_STATUS_INTERVAL:-5000}
+    volumes:
+      - test-data:/test-data:ro
+      - server-data:/data
+      - ./server:/app/server:ro
+      - ./shared:/app/shared:ro
+    ports:
+      - "${SERVER_PORT:-3020}:3020"
+    networks:
+      - test-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3020/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # Client Machine 1 - Primary development machine
+  client-machine-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      target: client
+    container_name: claudecodeui-client-1
+    hostname: dev-machine-1
+    environment:
+      - NODE_ENV=test
+      - SERVER_URL=http://server:3020
+      - CLIENT_API_TOKEN=${CLIENT_API_TOKEN_1}
+      - CLIENT_PORT=${CLIENT_PORT_1:-3021}
+      - MACHINE_NAME=dev-machine-1
+      - MACHINE_ID=machine-001
+      - MACHINE_TYPE=desktop
+      - MACHINE_OS=macos
+      - MACHINE_LOCATION=home-office
+      - TEST_USER_EMAIL=${TEST_USER_EMAIL:-testuser@example.com}
+      - TEST_USER_PASSWORD=${TEST_USER_PASSWORD:-testpass123}
+      - ENABLE_TEST_MODE=${ENABLE_TEST_MODE:-true}
+      # MCP Configuration
+      - MCP_SERVERS_ENABLED=${MCP_SERVERS_ENABLED:-true}
+      - MCP_CONFIG_PATH=/test-data/.claude/mcp-config.json
+    volumes:
+      - test-data-1:/test-data
+      - claude-sessions-1:/test-data/.claude
+      - ./client:/app/client:ro
+      - ./shared:/app/shared:ro
+      - machine-1-projects:/projects
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - test-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3021/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # Client Machine 2 - Secondary laptop
+  client-machine-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      target: client
+    container_name: claudecodeui-client-2
+    hostname: dev-laptop
+    environment:
+      - NODE_ENV=test
+      - SERVER_URL=http://server:3020
+      - CLIENT_API_TOKEN=${CLIENT_API_TOKEN_2}
+      - CLIENT_PORT=${CLIENT_PORT_2:-3022}
+      - MACHINE_NAME=dev-laptop
+      - MACHINE_ID=machine-002
+      - MACHINE_TYPE=laptop
+      - MACHINE_OS=ubuntu
+      - MACHINE_LOCATION=coffee-shop
+      - TEST_USER_EMAIL=${TEST_USER_EMAIL:-testuser@example.com}
+      - TEST_USER_PASSWORD=${TEST_USER_PASSWORD:-testpass123}
+      - ENABLE_TEST_MODE=${ENABLE_TEST_MODE:-true}
+      # Different MCP configuration
+      - MCP_SERVERS_ENABLED=${MCP_SERVERS_ENABLED:-true}
+      - MCP_CONFIG_PATH=/test-data/.claude/mcp-config-minimal.json
+    volumes:
+      - test-data-2:/test-data
+      - claude-sessions-2:/test-data/.claude
+      - ./client:/app/client:ro
+      - ./shared:/app/shared:ro
+      - machine-2-projects:/projects
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - test-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3022/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # Client Machine 3 - Work desktop (optional with profile)
+  client-machine-3:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      target: client
+    container_name: claudecodeui-client-3
+    hostname: work-desktop
+    environment:
+      - NODE_ENV=test
+      - SERVER_URL=http://server:3020
+      - CLIENT_API_TOKEN=${CLIENT_API_TOKEN_3}
+      - CLIENT_PORT=${CLIENT_PORT_3:-3023}
+      - MACHINE_NAME=work-desktop
+      - MACHINE_ID=machine-003
+      - MACHINE_TYPE=desktop
+      - MACHINE_OS=windows
+      - MACHINE_LOCATION=corporate-office
+      - TEST_USER_EMAIL=${TEST_USER_EMAIL:-testuser@example.com}
+      - TEST_USER_PASSWORD=${TEST_USER_PASSWORD:-testpass123}
+      - ENABLE_TEST_MODE=${ENABLE_TEST_MODE:-true}
+      # Work-specific MCP configuration
+      - MCP_SERVERS_ENABLED=${MCP_SERVERS_ENABLED:-true}
+      - MCP_CONFIG_PATH=/test-data/.claude/mcp-config-corporate.json
+    volumes:
+      - test-data-3:/test-data
+      - claude-sessions-3:/test-data/.claude
+      - ./client:/app/client:ro
+      - ./shared:/app/shared:ro
+      - machine-3-projects:/projects
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - test-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3023/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    profiles:
+      - full
+
+  # Simulated offline machine for testing connection failures
+  client-machine-offline:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      target: client
+    container_name: claudecodeui-client-offline
+    hostname: offline-machine
+    environment:
+      - NODE_ENV=test
+      - SERVER_URL=http://server:3020
+      - CLIENT_API_TOKEN=${CLIENT_API_TOKEN_OFFLINE:-test-token-offline}
+      - CLIENT_PORT=${CLIENT_PORT_OFFLINE:-3024}
+      - MACHINE_NAME=offline-machine
+      - MACHINE_ID=machine-offline
+      - MACHINE_TYPE=desktop
+      - MACHINE_OS=linux
+      - SIMULATE_OFFLINE=true
+      - OFFLINE_AFTER_SECONDS=${OFFLINE_AFTER_SECONDS:-30}
+    volumes:
+      - test-data-offline:/test-data
+      - claude-sessions-offline:/test-data/.claude
+      - ./client:/app/client:ro
+      - ./shared:/app/shared:ro
+      - machine-offline-projects:/projects
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - test-net
+    # No healthcheck - simulates offline behavior
+    profiles:
+      - offline-test
+
+  # Test runner for multi-machine scenarios
+  test-runner-multi:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      target: test-runner
+    container_name: claudecodeui-multi-test-runner
+    environment:
+      - NODE_ENV=test
+      - SERVER_URL=http://server:3020
+      - CLIENT_URL_1=http://client-machine-1:3021
+      - CLIENT_URL_2=http://client-machine-2:3022
+      - CLIENT_URL_3=http://client-machine-3:3023
+      - CLIENT_URL_OFFLINE=http://client-machine-offline:3024
+      - PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+      - CI=${CI:-true}
+      - TEST_TIMEOUT=${TEST_TIMEOUT:-60000}  # Longer timeout for multi-machine tests
+      - HEADLESS=${HEADLESS:-true}
+      # Test credentials
+      - TEST_USER_EMAIL=${TEST_USER_EMAIL:-testuser@example.com}
+      - TEST_USER_PASSWORD=${TEST_USER_PASSWORD:-testpass123}
+      - TEST_USER_USERNAME=${TEST_USER_USERNAME:-testuser}
+      - CLIENT_API_TOKEN_1=${CLIENT_API_TOKEN_1}
+      - CLIENT_API_TOKEN_2=${CLIENT_API_TOKEN_2}
+      - CLIENT_API_TOKEN_3=${CLIENT_API_TOKEN_3}
+      - JWT_SECRET=${JWT_SECRET}
+      # Multi-machine test configuration
+      - TEST_MULTI_MACHINE=true
+      - NUM_MACHINES=${NUM_MACHINES:-2}  # Default to 2 machines, use profile for 3
+    volumes:
+      - test-data:/test-data:ro
+      - ./tests:/app/tests:ro
+      - ./server:/app/server:ro
+      - ./client:/app/client:ro
+      - ./shared:/app/shared:ro
+      - test-results:/app/test-results
+      - coverage-data:/app/coverage
+      - playwright-cache:/ms-playwright
+    depends_on:
+      - server
+      - client-machine-1
+      - client-machine-2
+    networks:
+      - test-net
+    command: >
+      sh -c "
+        echo 'Waiting for all machines to be ready...' &&
+        sleep 15 &&
+        echo 'Testing machine connectivity...' &&
+        curl -f http://server:3020/health &&
+        curl -f http://client-machine-1:3021/health &&
+        curl -f http://client-machine-2:3022/health &&
+        echo 'Starting multi-machine test execution...' &&
+        npm run test:multi-machine
+      "
+
+  # Test data generator (shared across all machines)
+  test-data-generator:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      target: test-data
+    container_name: claudecodeui-multi-data-gen
+    volumes:
+      - test-data:/test-data
+      - test-data-1:/test-data-1
+      - test-data-2:/test-data-2
+      - test-data-3:/test-data-3
+      - test-data-offline:/test-data-offline
+    networks:
+      - test-net
+    command: >
+      sh -c "
+        echo 'Generating test data for all machines...' &&
+        cd /test-data &&
+        ./scripts/generate-test-data.sh &&
+        ./scripts/setup-claude-sessions.sh &&
+        
+        echo 'Copying data to machine-specific volumes...' &&
+        cp -r /test-data/* /test-data-1/ 2>/dev/null || true &&
+        cp -r /test-data/* /test-data-2/ 2>/dev/null || true &&
+        cp -r /test-data/* /test-data-3/ 2>/dev/null || true &&
+        cp -r /test-data/* /test-data-offline/ 2>/dev/null || true &&
+        
+        echo 'Creating machine-specific configurations...' &&
+        echo '{\"machineId\": \"machine-001\", \"machineName\": \"dev-machine-1\", \"type\": \"desktop\", \"os\": \"macos\"}' > /test-data-1/machine-config.json &&
+        echo '{\"machineId\": \"machine-002\", \"machineName\": \"dev-laptop\", \"type\": \"laptop\", \"os\": \"ubuntu\"}' > /test-data-2/machine-config.json &&
+        echo '{\"machineId\": \"machine-003\", \"machineName\": \"work-desktop\", \"type\": \"desktop\", \"os\": \"windows\"}' > /test-data-3/machine-config.json &&
+        echo '{\"machineId\": \"machine-offline\", \"machineName\": \"offline-machine\", \"type\": \"desktop\", \"os\": \"linux\"}' > /test-data-offline/machine-config.json &&
+        
+        echo 'Multi-machine test data generation complete!'
+      "
+    profiles:
+      - setup
+
+# Networks
+networks:
+  test-net:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.21.0.0/16
+
+# Volumes - separate for each machine to simulate independent environments
+volumes:
+  # Shared data
+  test-data:
+    driver: local
+  server-data:
+    driver: local
+  test-results:
+    driver: local
+  coverage-data:
+    driver: local
+  playwright-cache:
+    driver: local
+  
+  # Machine 1 volumes
+  test-data-1:
+    driver: local
+  claude-sessions-1:
+    driver: local
+  machine-1-projects:
+    driver: local
+  
+  # Machine 2 volumes
+  test-data-2:
+    driver: local
+  claude-sessions-2:
+    driver: local
+  machine-2-projects:
+    driver: local
+  
+  # Machine 3 volumes
+  test-data-3:
+    driver: local
+  claude-sessions-3:
+    driver: local
+  machine-3-projects:
+    driver: local
+  
+  # Offline machine volumes
+  test-data-offline:
+    driver: local
+  claude-sessions-offline:
+    driver: local
+  machine-offline-projects:
+    driver: local
+
+# Extension fields for test scenarios
+x-test-scenarios:
+  machine-switching: &machine-switching
+    test-runner-multi:
+      command: npm run test:machine-switching
+  
+  concurrent-operations: &concurrent-ops
+    test-runner-multi:
+      command: npm run test:concurrent-ops
+  
+  offline-recovery: &offline-recovery
+    test-runner-multi:
+      command: npm run test:offline-recovery
+      depends_on:
+        - server
+        - client-machine-1
+        - client-machine-2
+        - client-machine-offline
+
+# Usage examples:
+# Default (2 machines): docker-compose -f docker-compose.multi-machine.yml up
+# Full (3 machines): docker-compose -f docker-compose.multi-machine.yml --profile full up
+# With offline test: docker-compose -f docker-compose.multi-machine.yml --profile offline-test up
+# Setup only: docker-compose -f docker-compose.multi-machine.yml --profile setup up test-data-generator

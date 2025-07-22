@@ -1,0 +1,260 @@
+<html><head><meta charset="utf-8"/><title>Claude Code UI Test Report</title><style type="text/css">html,
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 1rem;
+  margin: 0;
+  padding: 0;
+  color: #333;
+}
+body {
+  padding: 2rem 1rem;
+  font-size: 0.85rem;
+}
+.jesthtml-content {
+  margin: 0 auto;
+  max-width: 70rem;
+}
+header {
+  display: flex;
+  align-items: center;
+}
+#title {
+  margin: 0;
+  flex-grow: 1;
+}
+#logo {
+  height: 4rem;
+}
+#timestamp {
+  color: #777;
+  margin-top: 0.5rem;
+}
+
+/** SUMMARY */
+#summary {
+  color: #333;
+  margin: 2rem 0;
+  display: flex;
+  font-family: monospace;
+  font-size: 1rem;
+}
+#summary > div {
+  margin-right: 2rem;
+  background: #eee;
+  padding: 1rem;
+  min-width: 15rem;
+}
+#summary > div:last-child {
+  margin-right: 0;
+}
+@media only screen and (max-width: 720px) {
+  #summary {
+    flex-direction: column;
+  }
+  #summary > div {
+    margin-right: 0;
+    margin-top: 2rem;
+  }
+  #summary > div:first-child {
+    margin-top: 0;
+  }
+}
+
+.summary-total {
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+.summary-passed {
+  color: #4f8a10;
+  border-left: 0.4rem solid #4f8a10;
+  padding-left: 0.5rem;
+}
+.summary-failed,
+.summary-obsolete-snapshots {
+  color: #d8000c;
+  border-left: 0.4rem solid #d8000c;
+  padding-left: 0.5rem;
+}
+.summary-pending {
+  color: #9f6000;
+  border-left: 0.4rem solid #9f6000;
+  padding-left: 0.5rem;
+}
+.summary-empty {
+  color: #999;
+  border-left: 0.4rem solid #999;
+}
+
+.test-result {
+  padding: 1rem;
+  margin-bottom: 0.25rem;
+}
+.test-result:last-child {
+  border: 0;
+}
+.test-result.passed {
+  background-color: #dff2bf;
+  color: #4f8a10;
+}
+.test-result.failed {
+  background-color: #ffbaba;
+  color: #d8000c;
+}
+.test-result.pending {
+  background-color: #ffdf61;
+  color: #9f6000;
+}
+
+.test-info {
+  display: flex;
+  justify-content: space-between;
+}
+.test-suitename {
+  width: 20%;
+  text-align: left;
+  font-weight: bold;
+  word-break: break-word;
+}
+.test-title {
+  width: 40%;
+  text-align: left;
+  font-style: italic;
+}
+.test-status {
+  width: 20%;
+  text-align: right;
+}
+.test-duration {
+  width: 10%;
+  text-align: right;
+  font-size: 0.75rem;
+}
+
+.failureMessages {
+  padding: 0 1rem;
+  margin-top: 1rem;
+  border-top: 1px dashed #d8000c;
+}
+.failureMessages.suiteFailure {
+  border-top: none;
+}
+.failureMsg {
+  white-space: pre-wrap;
+  white-space: -moz-pre-wrap;
+  white-space: -pre-wrap;
+  white-space: -o-pre-wrap;
+  word-wrap: break-word;
+}
+
+.suite-container {
+  margin-bottom: 2rem;
+}
+.suite-container > input[type="checkbox"] {
+  position: absolute;
+  left: -100vw;
+}
+.suite-container label {
+  display: block;
+}
+.suite-container .suite-tests {
+  overflow-y: hidden;
+  height: 0;
+}
+.suite-container > input[type="checkbox"]:checked ~ .suite-tests {
+  height: auto;
+  overflow: visible;
+}
+.suite-info {
+  padding: 1rem;
+  background-color: #eee;
+  color: #777;
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.25rem;
+}
+.suite-info:hover {
+  background-color: #ddd;
+  cursor: pointer;
+}
+.suite-info .suite-path {
+  word-break: break-all;
+  flex-grow: 1;
+  font-family: monospace;
+  font-size: 1rem;
+}
+.suite-info .suite-time {
+  margin-left: 0.5rem;
+  padding: 0.2rem 0.3rem;
+  font-size: 0.75rem;
+}
+.suite-info .suite-time.warn {
+  background-color: #d8000c;
+  color: #fff;
+}
+.suite-info:before {
+  content: "\2303";
+  display: inline-block;
+  margin-right: 0.5rem;
+  transform: rotate(0deg);
+}
+.suite-container > input[type="checkbox"]:checked ~ label .suite-info:before {
+  transform: rotate(180deg);
+}
+
+/* CONSOLE LOGS */
+.suite-consolelog {
+  margin-bottom: 0.25rem;
+  padding: 1rem;
+  background-color: #efefef;
+}
+.suite-consolelog-header {
+  font-weight: bold;
+}
+.suite-consolelog-item {
+  padding: 0.5rem;
+}
+.suite-consolelog-item pre {
+  margin: 0.5rem 0;
+  white-space: pre-wrap;
+  white-space: -moz-pre-wrap;
+  white-space: -pre-wrap;
+  white-space: -o-pre-wrap;
+  word-wrap: break-word;
+}
+.suite-consolelog-item-origin {
+  color: #777;
+  font-weight: bold;
+}
+.suite-consolelog-item-message {
+  color: #000;
+  font-size: 1rem;
+  padding: 0 0.5rem;
+}
+
+/* OBSOLETE SNAPSHOTS */
+.suite-obsolete-snapshots {
+  margin-bottom: 0.25rem;
+  padding: 1rem;
+  background-color: #ffbaba;
+  color: #d8000c;
+}
+.suite-obsolete-snapshots-header {
+  font-weight: bold;
+}
+.suite-obsolete-snapshots-item {
+  padding: 0.5rem;
+}
+.suite-obsolete-snapshots-item pre {
+  margin: 0.5rem 0;
+  white-space: pre-wrap;
+  white-space: -moz-pre-wrap;
+  white-space: -pre-wrap;
+  white-space: -o-pre-wrap;
+  word-wrap: break-word;
+}
+.suite-obsolete-snapshots-item-message {
+  color: #000;
+  font-size: 1rem;
+  padding: 0 0.5rem;
+}
+</style></head><body><div class="jesthtml-content"><header><h1 id="title">Claude Code UI Test Report</h1></header><div id="metadata-container"><div id="timestamp">Started: 2025-07-21 22:47:15</div><div id="summary"><div id="suite-summary"><div class="summary-total">Suites (6)</div><div class="summary-passed ">6 passed</div><div class="summary-failed  summary-empty">0 failed</div><div class="summary-pending  summary-empty">0 pending</div></div><div id="test-summary"><div class="summary-total">Tests (121)</div><div class="summary-passed ">121 passed</div><div class="summary-failed  summary-empty">0 failed</div><div class="summary-pending  summary-empty">0 pending</div></div></div></div><div id="suite-1" class="suite-container"><input id="collapsible-0" type="checkbox" class="toggle" checked="checked"/><label for="collapsible-0"><div class="suite-info"><div class="suite-path">/Users/shan/dev/iotashan/claudecodeui-docker-tests/tests/unit/server/api.test.js</div><div class="suite-time warn">9.448s</div></div></label><div class="suite-tests"><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; Health Check Endpoint</div><div class="test-title">should return health status</div><div class="test-status">passed</div><div class="test-duration">0.249s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; Health Check Endpoint</div><div class="test-title">should include proper headers</div><div class="test-status">passed</div><div class="test-duration">0.229s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; Authentication Endpoints</div><div class="test-title">should login with valid credentials</div><div class="test-status">passed</div><div class="test-duration">0.457s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; Authentication Endpoints</div><div class="test-title">should reject invalid credentials</div><div class="test-status">passed</div><div class="test-duration">0.465s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; Authentication Endpoints</div><div class="test-title">should require username and password for login</div><div class="test-status">passed</div><div class="test-duration">0.237s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; Authentication Endpoints</div><div class="test-title">should register new user when no users exist</div><div class="test-status">passed</div><div class="test-duration">0.235s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; Authentication Endpoints</div><div class="test-title">should reject registration when users exist</div><div class="test-status">passed</div><div class="test-duration">0.239s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; Authentication Endpoints</div><div class="test-title">should get current user info</div><div class="test-status">passed</div><div class="test-duration">0.228s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; Authentication Endpoints</div><div class="test-title">should logout user</div><div class="test-status">passed</div><div class="test-duration">0.225s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; Projects API</div><div class="test-title">should get list of projects</div><div class="test-status">passed</div><div class="test-duration">2.228s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; Projects API</div><div class="test-title">should handle projects API error</div><div class="test-status">passed</div><div class="test-duration">0.926s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; Sessions API</div><div class="test-title">should get project sessions</div><div class="test-status">passed</div><div class="test-duration">0.23s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; Sessions API</div><div class="test-title">should handle pagination parameters</div><div class="test-status">passed</div><div class="test-duration">0.226s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; Sessions API</div><div class="test-title">should get session messages</div><div class="test-status">passed</div><div class="test-duration">0.224s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; Machine Management API</div><div class="test-title">should get list of machines</div><div class="test-status">passed</div><div class="test-duration">0.228s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; Machine Management API</div><div class="test-title">should require authentication for machines</div><div class="test-status">passed</div><div class="test-duration">0.225s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; Machine Management API</div><div class="test-title">should create API token for machine</div><div class="test-status">passed</div><div class="test-duration">0.225s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; Error Handling</div><div class="test-title">should handle 404 for non-existent routes</div><div class="test-status">passed</div><div class="test-duration">0.229s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; Error Handling</div><div class="test-title">should handle malformed JSON</div><div class="test-status">passed</div><div class="test-duration">0.24s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; Request Validation</div><div class="test-title">should validate username length on registration</div><div class="test-status">passed</div><div class="test-duration">0.224s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; Request Validation</div><div class="test-title">should validate password strength</div><div class="test-status">passed</div><div class="test-duration">0.236s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; CORS Configuration</div><div class="test-title">should include CORS headers</div><div class="test-status">passed</div><div class="test-duration">0.228s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; CORS Configuration</div><div class="test-title">should handle preflight requests</div><div class="test-status">passed</div><div class="test-duration">0.232s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; API Token Authentication</div><div class="test-title">should authenticate with API token</div><div class="test-status">passed</div><div class="test-duration">0.235s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; API Token Authentication</div><div class="test-title">should reject invalid API token</div><div class="test-status">passed</div><div class="test-duration">0.235s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">API Endpoints &gt; API Token Authentication</div><div class="test-title">should track API token usage</div><div class="test-status">passed</div><div class="test-duration">0.237s</div></div></div></div></div><div id="suite-2" class="suite-container"><input id="collapsible-1" type="checkbox" class="toggle" checked="checked"/><label for="collapsible-1"><div class="suite-info"><div class="suite-path">/Users/shan/dev/iotashan/claudecodeui-docker-tests/tests/unit/server/auth.test.js</div><div class="suite-time warn">7.614s</div></div></label><div class="suite-tests"><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; validateApiKey</div><div class="test-title">should pass through when no API_KEY env var is set</div><div class="test-status">passed</div><div class="test-duration">0.224s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; validateApiKey</div><div class="test-title">should validate global API key when set</div><div class="test-status">passed</div><div class="test-duration">0.228s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; validateApiKey</div><div class="test-title">should reject invalid global API key</div><div class="test-status">passed</div><div class="test-duration">0.225s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; authenticateToken</div><div class="test-title">should authenticate valid JWT token</div><div class="test-status">passed</div><div class="test-duration">0.232s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; authenticateToken</div><div class="test-title">should reject missing authorization header</div><div class="test-status">passed</div><div class="test-duration">0.226s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; authenticateToken</div><div class="test-title">should reject malformed authorization header</div><div class="test-status">passed</div><div class="test-duration">0.229s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; authenticateToken</div><div class="test-title">should reject invalid JWT token</div><div class="test-status">passed</div><div class="test-duration">0.229s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; authenticateToken</div><div class="test-title">should reject expired JWT token</div><div class="test-status">passed</div><div class="test-duration">0.332s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; authenticateWebSocket</div><div class="test-title">should authenticate valid JWT WebSocket token</div><div class="test-status">passed</div><div class="test-duration">0.229s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; authenticateWebSocket</div><div class="test-title">should authenticate valid API token for WebSocket</div><div class="test-status">passed</div><div class="test-duration">0.231s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; authenticateWebSocket</div><div class="test-title">should reject invalid WebSocket token</div><div class="test-status">passed</div><div class="test-duration">0.236s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; authenticateWebSocket</div><div class="test-title">should reject missing WebSocket token</div><div class="test-status">passed</div><div class="test-duration">0.241s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; authenticateWebSocket</div><div class="test-title">should handle rate-limited API tokens</div><div class="test-status">passed</div><div class="test-duration">0.229s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; JWT Token Utilities</div><div class="test-title">should generate valid JWT token</div><div class="test-status">passed</div><div class="test-duration">0.244s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; JWT Token Utilities</div><div class="test-title">should handle token with custom expiration</div><div class="test-status">passed</div><div class="test-duration">0.231s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; Password Hashing</div><div class="test-title">should hash passwords securely</div><div class="test-status">passed</div><div class="test-duration">0.469s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; Password Hashing</div><div class="test-title">should verify correct passwords</div><div class="test-status">passed</div><div class="test-duration">0.683s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; Password Hashing</div><div class="test-title">should reject incorrect passwords</div><div class="test-status">passed</div><div class="test-duration">0.689s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; Password Hashing</div><div class="test-title">should create user with hashed password</div><div class="test-status">passed</div><div class="test-duration">0.465s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; Security Edge Cases</div><div class="test-title">should handle malformed JWT tokens gracefully</div><div class="test-status">passed</div><div class="test-duration">0.237s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; Security Edge Cases</div><div class="test-title">should reject tokens with wrong secret</div><div class="test-status">passed</div><div class="test-duration">0.236s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; Security Edge Cases</div><div class="test-title">should handle SQL injection attempts in API token</div><div class="test-status">passed</div><div class="test-duration">0.232s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; Security Edge Cases</div><div class="test-title">should enforce API token format</div><div class="test-status">passed</div><div class="test-duration">0.235s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; Rate Limiting</div><div class="test-title">should authenticate with user API token</div><div class="test-status">passed</div><div class="test-duration">0.229s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; Rate Limiting</div><div class="test-title">should track API token usage</div><div class="test-status">passed</div><div class="test-duration">0.239s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Authentication Middleware &gt; Rate Limiting</div><div class="test-title">should handle concurrent authentication requests</div><div class="test-status">passed</div><div class="test-duration">0.228s</div></div></div></div></div><div id="suite-3" class="suite-container"><input id="collapsible-2" type="checkbox" class="toggle" checked="checked"/><label for="collapsible-2"><div class="suite-info"><div class="suite-path">/Users/shan/dev/iotashan/claudecodeui-docker-tests/tests/unit/server/websocket-auth.test.js</div><div class="suite-time">0.09s</div></div></label><div class="suite-tests"><div class="test-result passed"><div class="test-info"><div class="test-suitename">WebSocket Authentication Logic &gt; JWT Token Validation</div><div class="test-title">should generate valid JWT token</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">WebSocket Authentication Logic &gt; JWT Token Validation</div><div class="test-title">should verify valid JWT token</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">WebSocket Authentication Logic &gt; JWT Token Validation</div><div class="test-title">should reject invalid JWT token</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">WebSocket Authentication Logic &gt; JWT Token Validation</div><div class="test-title">should reject expired JWT token</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">WebSocket Authentication Logic &gt; JWT Token Validation</div><div class="test-title">should reject JWT with wrong secret</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">WebSocket Authentication Logic &gt; Authentication Response Format</div><div class="test-title">should format JWT auth response correctly</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">WebSocket Authentication Logic &gt; Authentication Response Format</div><div class="test-title">should format API token auth response correctly</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">WebSocket Authentication Logic &gt; Authentication Response Format</div><div class="test-title">should return null for invalid auth</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div></div></div><div id="suite-4" class="suite-container"><input id="collapsible-3" type="checkbox" class="toggle" checked="checked"/><label for="collapsible-3"><div class="suite-info"><div class="suite-path">/Users/shan/dev/iotashan/claudecodeui-docker-tests/tests/unit/client/handlers.test.js</div><div class="suite-time">0.05s</div></div></label><div class="suite-tests"><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Claude Response Handlers</div><div class="test-title">should handle text response from Claude</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Claude Response Handlers</div><div class="test-title">should handle tool use response from Claude</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Claude Response Handlers</div><div class="test-title">should handle streaming response chunks</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Claude Response Handlers</div><div class="test-title">should handle session completion</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Session Management Handlers</div><div class="test-title">should handle session abort acknowledgment</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Session Management Handlers</div><div class="test-title">should handle session abort failure</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Shell Output Handlers</div><div class="test-title">should handle shell initialization output</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Shell Output Handlers</div><div class="test-title">should handle command execution output</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Shell Output Handlers</div><div class="test-title">should handle shell error output</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Shell Output Handlers</div><div class="test-title">should handle shell exit</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Machine Communication Handlers</div><div class="test-title">should handle machine registration acknowledgment</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Machine Communication Handlers</div><div class="test-title">should handle heartbeat acknowledgment</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Machine Communication Handlers</div><div class="test-title">should handle project list response</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Machine Communication Handlers</div><div class="test-title">should handle empty project list</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Error Handlers</div><div class="test-title">should handle authentication errors</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Error Handlers</div><div class="test-title">should handle connection errors</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Error Handlers</div><div class="test-title">should handle API errors</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Error Handlers</div><div class="test-title">should handle unknown message types</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Rate Limiting Handlers</div><div class="test-title">should handle rate limit exceeded</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Rate Limiting Handlers</div><div class="test-title">should handle rate limit warnings</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Message Routing</div><div class="test-title">should route messages to correct handlers</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Message Routing</div><div class="test-title">should handle unknown message types</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Handler Error Recovery</div><div class="test-title">should handle handler exceptions gracefully</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client Message Handlers &gt; Handler Error Recovery</div><div class="test-title">should handle malformed message data</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div></div></div><div id="suite-5" class="suite-container"><input id="collapsible-4" type="checkbox" class="toggle" checked="checked"/><label for="collapsible-4"><div class="suite-info"><div class="suite-path">/Users/shan/dev/iotashan/claudecodeui-docker-tests/tests/unit/client/connection.test.js</div><div class="suite-time">0.047s</div></div></label><div class="suite-tests"><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Connection Establishment</div><div class="test-title">should connect to WebSocket server</div><div class="test-status">passed</div><div class="test-duration">0.002s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Connection Establishment</div><div class="test-title">should handle connection with authentication token</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Connection Establishment</div><div class="test-title">should handle connection failure</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Connection Establishment</div><div class="test-title">should handle connection timeout</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Message Sending</div><div class="test-title">should send Claude command messages</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Message Sending</div><div class="test-title">should send shell input messages</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Message Sending</div><div class="test-title">should send machine registration messages</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Message Sending</div><div class="test-title">should throw error when not connected</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Message Sending</div><div class="test-title">should handle large messages</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Connection States</div><div class="test-title">should track connection state correctly</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Connection States</div><div class="test-title">should handle rapid connect/disconnect cycles</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Reconnection Logic</div><div class="test-title">should attempt reconnection on connection loss</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Reconnection Logic</div><div class="test-title">should respect max reconnect attempts</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Reconnection Logic</div><div class="test-title">should reset reconnect attempts on successful connection</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Reconnection Logic</div><div class="test-title">should use exponential backoff for reconnection delays</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Authentication</div><div class="test-title">should send authentication after connection</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Authentication</div><div class="test-title">should handle authentication failure</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Authentication</div><div class="test-title">should refresh expired tokens</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Message Queue</div><div class="test-title">should queue messages when disconnected</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Message Queue</div><div class="test-title">should send queued messages on reconnection</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Message Queue</div><div class="test-title">should limit message queue size</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Heartbeat and Keep-Alive</div><div class="test-title">should send heartbeat messages</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Heartbeat and Keep-Alive</div><div class="test-title">should detect missed heartbeat responses</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Connection Cleanup</div><div class="test-title">should clean up resources on disconnect</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Connection Cleanup</div><div class="test-title">should handle cleanup errors gracefully</div><div class="test-status">passed</div><div class="test-duration">0.002s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Error Handling</div><div class="test-title">should handle network errors</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Error Handling</div><div class="test-title">should handle server errors</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">Client WebSocket Connection &gt; Error Handling</div><div class="test-title">should handle malformed server responses</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div></div></div><div id="suite-6" class="suite-container"><input id="collapsible-5" type="checkbox" class="toggle" checked="checked"/><label for="collapsible-5"><div class="suite-info"><div class="suite-path">/Users/shan/dev/iotashan/claudecodeui-docker-tests/tests/unit/server/websocket.test.js</div><div class="suite-time">0.038s</div></div></label><div class="suite-tests"><div class="test-result passed"><div class="test-info"><div class="test-suitename">WebSocket Message Handling &gt; Message Processing</div><div class="test-title">should handle ping-pong messages</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">WebSocket Message Handling &gt; Message Processing</div><div class="test-title">should echo messages when requested</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">WebSocket Message Handling &gt; Message Processing</div><div class="test-title">should handle unknown message types</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">WebSocket Message Handling &gt; Message Processing</div><div class="test-title">should handle malformed JSON</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">WebSocket Message Handling &gt; Message Processing</div><div class="test-title">should handle errors during processing</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">WebSocket Message Handling &gt; Connection State</div><div class="test-title">should check if connection is open</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">WebSocket Message Handling &gt; Connection State</div><div class="test-title">should handle closed connection</div><div class="test-status">passed</div><div class="test-duration">0s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">WebSocket Message Handling &gt; Binary Message Support</div><div class="test-title">should handle binary data</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div><div class="test-result passed"><div class="test-info"><div class="test-suitename">WebSocket Message Handling &gt; Rate Limiting</div><div class="test-title">should implement basic rate limiting</div><div class="test-status">passed</div><div class="test-duration">0.001s</div></div></div></div></div></div></body></html>

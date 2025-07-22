@@ -150,6 +150,45 @@ For detailed architecture information, see
 For connecting remote machines and other advanced configurations, see
 [SETUP_CLIENT.md](./SETUP_CLIENT.md).
 
+## Testing
+
+This project includes a comprehensive test suite with unit, integration, and end-to-end tests.
+
+### Running Tests Locally
+
+```bash
+# Install dependencies
+npm install
+
+# Run all tests
+npm run test:all
+
+# Run specific test suites
+npm run test:unit       # Unit tests only
+npm run test:integration # Integration tests only
+npm run test:e2e        # End-to-end tests only
+```
+
+### Docker Testing
+
+For consistent test environments, use the Docker-based testing pipeline:
+
+```bash
+# Build and run all tests
+./scripts/test-docker.sh
+
+# Or use docker-compose directly
+docker-compose -f docker-compose.test.yml up test-runner
+```
+
+### Test Coverage
+
+- **Unit Tests**: Authentication, API endpoints, WebSocket connections
+- **Integration Tests**: Server-client communication, auth flows, Git operations
+- **E2E Tests**: User workflows, multi-machine scenarios
+
+See [tests/README.md](tests/README.md) for detailed testing documentation.
+
 ## Contributing
 
 We welcome contributions! Please see
