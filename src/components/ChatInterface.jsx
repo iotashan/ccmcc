@@ -535,7 +535,6 @@ function ChatInterface({
             </svg>
           </button>
           
-<<<<<<< HEAD
           <button
             onClick={onShowSettings}
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"

@@ -41,7 +41,7 @@ function MainContent({
   autoExpandTools,        // Auto-expand tool accordions
   showRawParameters,      // Show raw parameters in tool accordions
   autoScrollToBottom,     // Auto-scroll to bottom when new messages arrive
-  selectedMachine         // Selected machine ID for multi-machine support
+  selectedMachine,        // Selected machine ID for multi-machine support
   sendByCtrlEnter         // Send by Ctrl+Enter mode for East Asian language input
 }) {
   const [editingFile, setEditingFile] = useState(null);
