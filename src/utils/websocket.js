@@ -43,15 +43,17 @@ export function useWebSocket() {
         if (wsBaseUrl.includes('localhost') && !window.location.hostname.includes('localhost')) {
           console.warn('Config returned localhost, using current host with API server port instead');
           const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-          // For development, API server is typically on port 3020 when Vite is on 3021
-          const apiPort = window.location.port === '3021' ? '3020' : window.location.port;
+          // For development, use environment variables to determine API port
+          const vitePort = import.meta.env.VITE_PORT || '3021';
+          const apiPort = window.location.port === vitePort ? (import.meta.env.VITE_API_PORT || '3020') : window.location.port;
           wsBaseUrl = `${protocol}//${window.location.hostname}:${apiPort}`;
         }
       } catch (error) {
         console.warn('Could not fetch server config, falling back to current host with API server port');
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        // For development, API server is typically on port 3020 when Vite is on 3021
-        const apiPort = window.location.port === '3021' ? '3020' : window.location.port;
+        // For development, use environment variables to determine API port
+        const vitePort = import.meta.env.VITE_PORT || '3021';
+        const apiPort = window.location.port === vitePort ? (import.meta.env.VITE_API_PORT || '3020') : window.location.port;
         wsBaseUrl = `${protocol}//${window.location.hostname}:${apiPort}`;
       }
       

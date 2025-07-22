@@ -617,11 +617,11 @@ function ToolsSettings({ isOpen, onClose, selectedMachine, machines }) {
 
   const getServerAddress = () => {
     if (serverInfo?.serverIP && serverInfo.serverIP !== 'localhost') {
-      return `${serverInfo.serverProtocol || 'http'}://${serverInfo.serverIP}:${serverInfo.serverPort || '3020'}`;
+      return `${serverInfo.serverProtocol || 'http'}://${serverInfo.serverIP}:${serverInfo.serverPort || import.meta.env.VITE_API_PORT || '3020'}`;
     }
     const protocol = window.location.protocol;
     const hostname = window.location.hostname;
-    const port = '3020';
+    const port = import.meta.env.VITE_API_PORT || '3020';
     return `${protocol}//${hostname}:${port}`;
   };
 
