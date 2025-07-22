@@ -659,11 +659,8 @@ function AppContent() {
           autoExpandTools={autoExpandTools}
           showRawParameters={showRawParameters}
           autoScrollToBottom={autoScrollToBottom}
-<<<<<<< HEAD
           selectedMachine={selectedMachine}
-=======
           sendByCtrlEnter={sendByCtrlEnter}
->>>>>>> 7f4feb1 (feat: add ctrl+enter send option & fix IME problen (#62))
         />
       </div>
 

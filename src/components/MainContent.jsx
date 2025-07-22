@@ -41,11 +41,8 @@ function MainContent({
   autoExpandTools,        // Auto-expand tool accordions
   showRawParameters,      // Show raw parameters in tool accordions
   autoScrollToBottom,     // Auto-scroll to bottom when new messages arrive
-<<<<<<< HEAD
   selectedMachine         // Selected machine ID for multi-machine support
-=======
   sendByCtrlEnter         // Send by Ctrl+Enter mode for East Asian language input
->>>>>>> 7f4feb1 (feat: add ctrl+enter send option & fix IME problen (#62))
 }) {
   const [editingFile, setEditingFile] = useState(null);
 
@@ -308,11 +305,8 @@ function MainContent({
             autoExpandTools={autoExpandTools}
             showRawParameters={showRawParameters}
             autoScrollToBottom={autoScrollToBottom}
-<<<<<<< HEAD
             selectedMachine={selectedMachine}
-=======
             sendByCtrlEnter={sendByCtrlEnter}
->>>>>>> 7f4feb1 (feat: add ctrl+enter send option & fix IME problen (#62))
           />
         </div>
         <div className={`h-full overflow-hidden ${activeTab === 'files' ? 'block' : 'hidden'}`}>
