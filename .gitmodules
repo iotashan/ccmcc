@@ -1,0 +1,3 @@
+[submodule "roiai-cli-analysis"]
+	path = roiai-cli-analysis
+	url = https://github.com/roiaifyi/roiai-cli.git
