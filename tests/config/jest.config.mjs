@@ -29,6 +29,7 @@ export default {
   testTimeout: 30000,
   maxWorkers: 1,  // Run tests sequentially to avoid database conflicts
   transform: {},
+  forceExit: true,  // Force Jest to exit after tests complete
   reporters: [
     'default',
     ['jest-junit', {

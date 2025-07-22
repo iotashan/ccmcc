@@ -86,24 +86,24 @@ export default defineConfig({
   ],
 
   // Global setup/teardown
-  globalSetup: require.resolve('./global-setup'),
-  globalTeardown: require.resolve('./global-teardown'),
+  // globalSetup: './global-setup',
+  // globalTeardown: './global-teardown',
 
   // Folder for test artifacts
-  outputDir: 'test-results/artifacts',
+  outputDir: '/app/test-results/artifacts',
 
   // Reporter configuration
   reporter: [
     ['list'],
     ['html', { 
       open: 'never',
-      outputFolder: 'test-results/playwright-report'
+      outputFolder: '/app/test-results/playwright-report'
     }],
     ['json', { 
-      outputFile: 'test-results/report.json' 
+      outputFile: '/app/test-results/report.json' 
     }],
     ['junit', { 
-      outputFile: 'test-results/junit.xml' 
+      outputFile: '/app/test-results/junit.xml' 
     }],
     process.env.CI ? ['github'] : null,
   ].filter(Boolean),

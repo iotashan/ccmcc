@@ -1,5 +1,5 @@
 {
-  "name": "claude-code-ui",
+  "name": "ccmcc",
   "version": "1.5.0",
   "description": "Claude Code Mission Control Center - A comprehensive web interface for Claude Code CLI",
   "type": "module",

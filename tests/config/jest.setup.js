@@ -19,6 +19,16 @@ beforeAll(async () => {
   await initializeDatabase();
 });
 
+// Clean up database connection after all tests
+afterAll(async () => {
+  const { db } = await import('../../server/database/db.js');
+  try {
+    db.close();
+  } catch (error) {
+    // Ignore errors during cleanup
+  }
+});
+
 // Mock only Claude CLI since we're not testing the actual Claude API
 jest.mock('child_process', () => {
   const actual = jest.requireActual('child_process');
@@ -62,13 +72,20 @@ beforeEach(async () => {
   // Clear database tables for clean test state
   const { db } = await import('../../server/database/db.js');
   try {
-    // Clear all data from tables - use immediate mode to avoid locks
-    db.exec('DELETE FROM machine_auth_codes');
-    db.exec('DELETE FROM api_tokens');
-    db.exec('DELETE FROM machines');
-    db.exec('DELETE FROM users');
+    // Clear all data from tables if they exist
+    const tables = ['machine_auth_codes', 'api_tokens', 'machines', 'users'];
+    for (const table of tables) {
+      // Check if table exists before trying to delete
+      const tableExists = db.prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?"
+      ).get(table);
+      
+      if (tableExists) {
+        db.exec(`DELETE FROM ${table}`);
+      }
+    }
   } catch (error) {
-    console.error('Error clearing database:', error);
+    // Silently ignore errors during cleanup
   }
 });
 

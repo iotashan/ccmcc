@@ -147,6 +147,9 @@ RUN npm ci
 RUN npx playwright install --with-deps chromium firefox
 
 # Create directories for test results
+RUN mkdir -p /app/test-results/artifacts && \
+    mkdir -p /app/test-results/playwright-report && \
+    mkdir -p /app/tests/test-results
 RUN mkdir -p test-results/screenshots && \
     mkdir -p test-results/videos && \
     mkdir -p test-results/traces && \
