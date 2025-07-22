@@ -44,7 +44,7 @@ const LoginForm = () => {
             </div>
             <h1 className="text-2xl font-bold text-foreground">Welcome Back</h1>
             <p className="text-muted-foreground mt-2">
-              Sign in to your Claude Code UI account
+              Sign in to Claude Code Mission Control Center
             </p>
           </div>
 

@@ -1,7 +1,7 @@
 {
   "name": "claude-code-ui",
   "version": "1.5.0",
-  "description": "A web-based UI for Claude Code CLI",
+  "description": "Claude Code Mission Control Center - A comprehensive web interface for Claude Code CLI",
   "type": "module",
   "main": "server/index.js",
   "scripts": {
@@ -28,10 +28,20 @@
     "ai",
     "code",
     "ui",
+    "ccmcc",
+    "mission-control",
     "assistant"
   ],
-  "author": "Claude Code UI Contributors",
+  "author": "Claude Code Mission Control Center Contributors",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iotashan/ccmcc.git"
+  },
+  "bugs": {
+    "url": "https://github.com/iotashan/ccmcc/issues"
+  },
+  "homepage": "https://github.com/iotashan/ccmcc#readme",
   "dependencies": {
     "@anthropic-ai/claude-code": "^1.0.24",
     "@codemirror/lang-css": "^6.3.1",
@@ -55,7 +65,7 @@
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.515.0",
     "mime-types": "^3.0.1",
-    "multer": "^2.0.1",
+    "multer": "^2.0.2",
     "node-fetch": "^2.7.0",
     "node-pty": "^1.0.0",
     "react": "^18.2.0",

@@ -1,11 +1,11 @@
 {
-  "name": "claude-code-ui-client",
+  "name": "ccmcc-client",
   "version": "1.0.0",
-  "description": "Machine client for Claude Code UI multi-machine support",
+  "description": "Machine client for Claude Code Mission Control Center (CCMCC) - enables multi-machine control",
   "type": "module",
   "main": "src/index.js",
   "bin": {
-    "claude-ui-client": "./src/cli.js"
+    "ccmcc-client": "./src/cli.js"
   },
   "scripts": {
     "start": "node src/index.js",
@@ -15,12 +15,17 @@
   "keywords": [
     "claude",
     "code",
-    "ui",
+    "ccmcc",
     "client",
-    "machine"
+    "machine",
+    "mission-control"
   ],
-  "author": "",
+  "author": "Claude Code Mission Control Center Contributors",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iotashan/ccmcc.git"
+  },
   "dependencies": {
     "ws": "^8.18.0",
     "commander": "^12.1.0",

@@ -17,9 +17,9 @@ const program = new Command();
 
 program
   .name('claude-ui-client')
-  .description('Machine client for Claude Code UI multi-machine support')
+  .description('Machine client for CCMCC multi-machine support')
   .version(packageJson.version)
-  .option('-s, --server <address>', 'Claude Code UI server address (default: ws://localhost:3000)')
+  .option('-s, --server <address>', 'CCMCC server address (default: ws://localhost:3000)')
   .option('-n, --name <name>', 'Machine name (default: IP address)')
   .option('-t, --token <token>', 'Authentication token for reconnection')
   .option('-d, --debug', 'Enable debug logging')
