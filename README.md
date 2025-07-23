@@ -147,8 +147,14 @@ For detailed architecture information, see
 
 ## Advanced Setup
 
-For connecting remote machines and other advanced configurations, see
-[SETUP_CLIENT.md](./SETUP_CLIENT.md).
+### Remote Machine Client
+
+For connecting remote machines and running the client as a system service:
+- See [client/README.md](./client/README.md) for detailed setup instructions
+- Includes platform-specific service configuration for:
+  - **macOS** - launchd service setup
+  - **Linux** - systemd service and Docker options
+  - **Windows** - Windows Service configuration
 
 ## Testing
 
