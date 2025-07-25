@@ -12,6 +12,7 @@ export default {
     'server/**/*.js',
     'client/**/*.js',
     'shared/**/*.js',
+    'src/utils/**/*.js',
     '!**/*.test.js',
     '!**/node_modules/**',
     '!**/test-data/**'

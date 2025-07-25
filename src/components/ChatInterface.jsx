@@ -22,6 +22,7 @@ import MessageInput from './chat/MessageInput';
 import ClaudeLogo from './ClaudeLogo.jsx';
 import { api } from '../utils/api';
 import { TEST_IDS } from '../utils/testIds';
+import { safeLocalStorage } from '../utils/safeLocalStorage';
 
 // Helper function to convert WebSocket messages to display format
 function convertWebSocketMessages(rawMessages) {
@@ -171,13 +172,13 @@ function ChatInterface({
 }) {
   const [input, setInput] = useState(() => {
     if (typeof window !== 'undefined' && selectedProject) {
-      return localStorage.getItem(`draft_input_${selectedProject.name}`) || '';
+      return safeLocalStorage.getItem(`draft_input_${selectedProject.name}`) || '';
     }
     return '';
   });
   const [chatMessages, setChatMessages] = useState(() => {
     if (typeof window !== 'undefined' && selectedProject) {
-      const saved = localStorage.getItem(`chat_messages_${selectedProject.name}`);
+      const saved = safeLocalStorage.getItem(`chat_messages_${selectedProject.name}`);
       return saved ? JSON.parse(saved) : [];
     }
     return [];
@@ -222,11 +223,22 @@ function ChatInterface({
   useEffect(() => {
     if (typeof window !== 'undefined' && selectedProject) {
       const timeoutId = setTimeout(() => {
-        localStorage.setItem(`draft_input_${selectedProject.name}`, input);
+        if (input) {
+          safeLocalStorage.setItem(`draft_input_${selectedProject.name}`, input);
+        } else {
+          safeLocalStorage.removeItem(`draft_input_${selectedProject.name}`);
+        }
       }, 500);
       return () => clearTimeout(timeoutId);
     }
   }, [input, selectedProject]);
+
+  // Persist chat messages to localStorage (with automatic truncation)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && selectedProject && chatMessages.length > 0) {
+      safeLocalStorage.setItem(`chat_messages_${selectedProject.name}`, JSON.stringify(chatMessages));
+    }
+  }, [chatMessages, selectedProject]);
 
   // Load session messages from API
   const loadSessionMessages = useCallback(async (sessionId) => {
@@ -295,6 +307,14 @@ function ChatInterface({
             break;
             
           case 'claude-complete':
+            setIsLoading(false);
+            onSessionInactive?.();
+            // Clear persisted chat messages after successful completion
+            if (selectedProject) {
+              safeLocalStorage.removeItem(`chat_messages_${selectedProject.name}`);
+            }
+            break;
+            
           case 'session-aborted':
             setIsLoading(false);
             onSessionInactive?.();
