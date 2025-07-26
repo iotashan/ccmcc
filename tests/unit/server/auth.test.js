@@ -1,5 +1,5 @@
 // tests/unit/server/auth.test.js
-import { describe, test, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 
@@ -32,8 +32,8 @@ describe('Authentication Middleware', () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
-    // Cleanup is handled by jest.setup.js
+    vi.clearAllMocks();
+    // Cleanup is handled by vi.setup.js
   });
 
   describe('validateApiKey', () => {
@@ -45,7 +45,7 @@ describe('Authentication Middleware', () => {
         headers: { 'x-api-key': 'some-key' }
       });
       const res = testUtils.createMockResponse();
-      const next = jest.fn();
+      const next = vi.fn();
 
       await validateApiKey(req, res, next);
 
@@ -60,7 +60,7 @@ describe('Authentication Middleware', () => {
         headers: { 'x-api-key': 'test-global-api-key' }
       });
       const res = testUtils.createMockResponse();
-      const next = jest.fn();
+      const next = vi.fn();
 
       await validateApiKey(req, res, next);
 
@@ -77,7 +77,7 @@ describe('Authentication Middleware', () => {
         headers: { 'x-api-key': 'wrong-key' }
       });
       const res = testUtils.createMockResponse();
-      const next = jest.fn();
+      const next = vi.fn();
 
       await validateApiKey(req, res, next);
 
@@ -100,7 +100,7 @@ describe('Authentication Middleware', () => {
         headers: { authorization: `Bearer ${token}` }
       });
       const res = testUtils.createMockResponse();
-      const next = jest.fn();
+      const next = vi.fn();
 
       await authenticateToken(req, res, next);
 
@@ -114,7 +114,7 @@ describe('Authentication Middleware', () => {
     test('should reject missing authorization header', async () => {
       const req = testUtils.createMockRequest();
       const res = testUtils.createMockResponse();
-      const next = jest.fn();
+      const next = vi.fn();
 
       await authenticateToken(req, res, next);
 
@@ -128,7 +128,7 @@ describe('Authentication Middleware', () => {
         headers: { authorization: 'InvalidFormat' }
       });
       const res = testUtils.createMockResponse();
-      const next = jest.fn();
+      const next = vi.fn();
 
       await authenticateToken(req, res, next);
 
@@ -142,7 +142,7 @@ describe('Authentication Middleware', () => {
         headers: { authorization: 'Bearer invalid-token' }
       });
       const res = testUtils.createMockResponse();
-      const next = jest.fn();
+      const next = vi.fn();
 
       await authenticateToken(req, res, next);
 
@@ -165,7 +165,7 @@ describe('Authentication Middleware', () => {
         headers: { authorization: `Bearer ${expiredToken}` }
       });
       const res = testUtils.createMockResponse();
-      const next = jest.fn();
+      const next = vi.fn();
 
       await authenticateToken(req, res, next);
 
@@ -347,7 +347,7 @@ describe('Authentication Middleware', () => {
           headers: { 'x-api-key': token }
         });
         const res = testUtils.createMockResponse();
-        const next = jest.fn();
+        const next = vi.fn();
 
         await validateApiKey(req, res, next);
 
@@ -386,7 +386,7 @@ describe('Authentication Middleware', () => {
         headers: { authorization: `Bearer ${testApiToken.token}` }
       });
       const res = testUtils.createMockResponse();
-      const next = jest.fn();
+      const next = vi.fn();
 
       await authenticateToken(req, res, next);
 
@@ -402,7 +402,7 @@ describe('Authentication Middleware', () => {
         headers: { authorization: `Bearer ${testApiToken.token}` }
       });
       const res = testUtils.createMockResponse();
-      const next = jest.fn();
+      const next = vi.fn();
 
       // First request should succeed
       await authenticateToken(req, res, next);
@@ -425,7 +425,7 @@ describe('Authentication Middleware', () => {
           headers: { authorization: `Bearer ${token}` }
         });
         const res = testUtils.createMockResponse();
-        const next = jest.fn();
+        const next = vi.fn();
         
         promises.push(authenticateToken(req, res, next));
       }

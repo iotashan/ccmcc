@@ -97,14 +97,20 @@ COPY package*.json ./
 COPY client/package*.json ./client/
 COPY shared/package*.json ./shared/
 
-# Install dependencies
-RUN npm ci --only=production && \
-    cd client && npm ci --only=production || true && \
-    cd ../shared && npm ci --only=production || true
+# Install dependencies (including dev deps for vite)
+RUN npm ci && \
+    cd client && npm ci || true && \
+    cd ../shared && npm ci || true
 
 # Copy client and shared code
 COPY client/ ./client/
 COPY shared/ ./shared/
+
+# Copy vite config
+COPY vite.config.js ./
+
+# Set client port
+ENV VITE_PORT=3021
 
 # Create necessary directories
 RUN mkdir -p /test-data/.claude/projects && \

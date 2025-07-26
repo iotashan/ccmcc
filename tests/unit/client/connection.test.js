@@ -1,5 +1,5 @@
 // tests/unit/client/connection.test.js
-import { describe, test, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 
 describe('Client WebSocket Connection', () => {
   let mockWebSocket;
@@ -9,10 +9,10 @@ describe('Client WebSocket Connection', () => {
   beforeEach(() => {
     mockWebSocket = testUtils.createMockWebSocket();
     connectionCallbacks = {
-      onOpen: jest.fn(),
-      onClose: jest.fn(),
-      onError: jest.fn(),
-      onMessage: jest.fn()
+      onOpen: vi.fn(),
+      onClose: vi.fn(),
+      onError: vi.fn(),
+      onMessage: vi.fn()
     };
 
     // Mock connection class
@@ -25,14 +25,14 @@ describe('Client WebSocket Connection', () => {
       reconnectDelay: 1000,
       isConnected: false,
       
-      connect: jest.fn(() => {
+      connect: vi.fn(() => {
         connection.ws = mockWebSocket;
         connection.isConnected = true;
         connectionCallbacks.onOpen();
         return Promise.resolve();
       }),
       
-      disconnect: jest.fn(() => {
+      disconnect: vi.fn(() => {
         if (connection.ws) {
           connection.ws.close();
           connection.isConnected = false;
@@ -40,7 +40,7 @@ describe('Client WebSocket Connection', () => {
         }
       }),
       
-      send: jest.fn((message) => {
+      send: vi.fn((message) => {
         if (connection.isConnected && connection.ws) {
           connection.ws.send(JSON.stringify(message));
         } else {
@@ -48,7 +48,7 @@ describe('Client WebSocket Connection', () => {
         }
       }),
       
-      reconnect: jest.fn(() => {
+      reconnect: vi.fn(() => {
         if (connection.reconnectAttempts < connection.maxReconnectAttempts) {
           connection.reconnectAttempts++;
           return connection.connect();
@@ -58,14 +58,14 @@ describe('Client WebSocket Connection', () => {
       })
     };
 
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
     if (connection.isConnected) {
       connection.disconnect();
     }
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe('Connection Establishment', () => {
@@ -87,7 +87,7 @@ describe('Client WebSocket Connection', () => {
     });
 
     test('should handle connection failure', async () => {
-      connection.connect = jest.fn(() => {
+      connection.connect = vi.fn(() => {
         connectionCallbacks.onError(new Error('Connection failed'));
         return Promise.reject(new Error('Connection failed'));
       });
@@ -102,7 +102,7 @@ describe('Client WebSocket Connection', () => {
 
     test('should handle connection timeout', async () => {
       const timeoutError = new Error('Connection timeout');
-      connection.connect = jest.fn(() => {
+      connection.connect = vi.fn(() => {
         setTimeout(() => connectionCallbacks.onError(timeoutError), 100);
         return Promise.reject(timeoutError);
       });
@@ -257,7 +257,7 @@ describe('Client WebSocket Connection', () => {
     test('should send authentication after connection', async () => {
       connection.token = 'test-jwt-token';
       
-      const authHandler = jest.fn(() => {
+      const authHandler = vi.fn(() => {
         connection.send({
           type: 'authenticate',
           token: connection.token
@@ -277,7 +277,7 @@ describe('Client WebSocket Connection', () => {
     test('should handle authentication failure', async () => {
       connection.token = 'invalid-token';
 
-      const authFailureHandler = jest.fn((error) => {
+      const authFailureHandler = vi.fn((error) => {
         connectionCallbacks.onError(new Error('Authentication failed'));
         connection.disconnect();
       });
@@ -290,7 +290,7 @@ describe('Client WebSocket Connection', () => {
     });
 
     test('should refresh expired tokens', async () => {
-      const tokenRefreshHandler = jest.fn(async () => {
+      const tokenRefreshHandler = vi.fn(async () => {
         connection.token = 'new-jwt-token';
         return connection.token;
       });
@@ -371,7 +371,7 @@ describe('Client WebSocket Connection', () => {
     test('should send heartbeat messages', async () => {
       await connection.connect();
 
-      const heartbeatHandler = jest.fn(() => {
+      const heartbeatHandler = vi.fn(() => {
         connection.send({
           type: 'MACHINE_HEARTBEAT',
           timestamp: Date.now()
@@ -419,7 +419,7 @@ describe('Client WebSocket Connection', () => {
     test('should clean up resources on disconnect', async () => {
       await connection.connect();
       
-      const cleanupHandler = jest.fn(() => {
+      const cleanupHandler = vi.fn(() => {
         // Clear intervals, remove event listeners, etc.
         connection.ws = null;
         connection.isConnected = false;
@@ -436,7 +436,7 @@ describe('Client WebSocket Connection', () => {
     test('should handle cleanup errors gracefully', async () => {
       await connection.connect();
 
-      const faultyCleanup = jest.fn(() => {
+      const faultyCleanup = vi.fn(() => {
         throw new Error('Cleanup failed');
       });
 
@@ -461,7 +461,7 @@ describe('Client WebSocket Connection', () => {
   describe('Error Handling', () => {
     test('should handle network errors', async () => {
       const networkError = new Error('Network unreachable');
-      connection.connect = jest.fn(() => {
+      connection.connect = vi.fn(() => {
         connectionCallbacks.onError(networkError);
         return Promise.reject(networkError);
       });

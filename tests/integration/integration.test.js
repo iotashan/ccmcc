@@ -1,14 +1,14 @@
-// tests/integration/integration-simple.test.js
-// Simplified integration tests that verify component interactions without real servers
+// tests/integration/integration.test.js
+// Integration tests that verify component interactions without real servers
 
-import { describe, test, expect, beforeEach, jest } from '@jest/globals';
+import { describe, test, expect, beforeEach, vi } from 'vitest';
 
 describe('Integration Tests', () => {
   describe('Authentication Flow', () => {
     test('should complete login flow', async () => {
       // This would test the flow without real servers
       const mockAuthFlow = {
-        login: jest.fn(async (username, password) => {
+        login: vi.fn(async (username, password) => {
           if (username === 'testuser' && password === 'testpass') {
             return { 
               success: true, 
@@ -18,7 +18,7 @@ describe('Integration Tests', () => {
           }
           throw new Error('Invalid credentials');
         }),
-        validateToken: jest.fn(async (token) => {
+        validateToken: vi.fn(async (token) => {
           if (token === 'mock-jwt-token') {
             return { valid: true, userId: 1 };
           }
@@ -30,15 +30,17 @@ describe('Integration Tests', () => {
       const result = await mockAuthFlow.login('testuser', 'testpass');
       expect(result.success).toBe(true);
       expect(result.token).toBeDefined();
+      expect(mockAuthFlow.login).toHaveBeenCalledWith('testuser', 'testpass');
       
       // Test token validation
       const validation = await mockAuthFlow.validateToken(result.token);
       expect(validation.valid).toBe(true);
+      expect(mockAuthFlow.validateToken).toHaveBeenCalledWith('mock-jwt-token');
     });
 
     test('should reject invalid credentials', async () => {
       const mockAuthFlow = {
-        login: jest.fn(async (username, password) => {
+        login: vi.fn(async (username, password) => {
           if (username === 'testuser' && password === 'testpass') {
             return { success: true };
           }
@@ -54,14 +56,14 @@ describe('Integration Tests', () => {
   describe('Machine Registration Flow', () => {
     test('should register machine successfully', async () => {
       const mockMachineFlow = {
-        register: jest.fn(async (machineData) => {
+        register: vi.fn(async (machineData) => {
           return {
             success: true,
             machineId: 'test-machine-123',
             authToken: 'machine-auth-token'
           };
         }),
-        connect: jest.fn(async (machineId, token) => {
+        connect: vi.fn(async (machineId, token) => {
           if (token === 'machine-auth-token') {
             return { connected: true, machineId };
           }
@@ -76,6 +78,10 @@ describe('Integration Tests', () => {
       });
       expect(registration.success).toBe(true);
       expect(registration.machineId).toBeDefined();
+      expect(mockMachineFlow.register).toHaveBeenCalledWith({
+        name: 'Test Machine',
+        capabilities: ['shell', 'files']
+      });
       
       // Connect with token
       const connection = await mockMachineFlow.connect(
@@ -83,22 +89,23 @@ describe('Integration Tests', () => {
         registration.authToken
       );
       expect(connection.connected).toBe(true);
+      expect(mockMachineFlow.connect).toHaveBeenCalledWith('test-machine-123', 'machine-auth-token');
     });
   });
 
   describe('Git Operations Flow', () => {
     test('should handle git status flow', async () => {
       const mockGitFlow = {
-        getStatus: jest.fn(async () => ({
+        getStatus: vi.fn(async () => ({
           branch: 'main',
           clean: false,
           modified: ['file1.js', 'file2.js']
         })),
-        stageFiles: jest.fn(async (files) => ({
+        stageFiles: vi.fn(async (files) => ({
           staged: files,
           success: true
         })),
-        commit: jest.fn(async (message) => ({
+        commit: vi.fn(async (message) => ({
           success: true,
           hash: 'abc123',
           message
@@ -123,18 +130,18 @@ describe('Integration Tests', () => {
   describe('Project Session Flow', () => {
     test('should handle project sessions', async () => {
       const mockSessionFlow = {
-        getProjects: jest.fn(async () => ([
+        getProjects: vi.fn(async () => ([
           { id: 'project1', name: 'Project 1' },
           { id: 'project2', name: 'Project 2' }
         ])),
-        getSessions: jest.fn(async (projectId) => ({
+        getSessions: vi.fn(async (projectId) => ({
           sessions: [
             { id: 'session1', projectId, messages: 10 },
             { id: 'session2', projectId, messages: 5 }
           ],
           total: 2
         })),
-        getMessages: jest.fn(async (sessionId) => ([
+        getMessages: vi.fn(async (sessionId) => ([
           { role: 'user', content: 'Hello' },
           { role: 'assistant', content: 'Hi there!' }
         ]))

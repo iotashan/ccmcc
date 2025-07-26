@@ -1,7 +1,7 @@
 // tests/unit/server/websocket-auth-simple.test.js
 // Simplified WebSocket authentication tests
 
-import { describe, test, expect, beforeEach } from '@jest/globals';
+import { describe, test, expect, beforeEach, vi } from 'vitest';
 import jwt from 'jsonwebtoken';
 
 describe('WebSocket Authentication Logic', () => {

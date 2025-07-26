@@ -1,5 +1,5 @@
 // tests/unit/server/api.test.js
-import { describe, test, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import cors from 'cors';
@@ -106,12 +106,12 @@ describe('API Endpoints', () => {
       });
     });
     
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
-    // Cleanup is handled by jest.setup.js (clears all tables)
-    jest.clearAllMocks();
+    // Cleanup is handled by vi.setup.js (clears all tables)
+    vi.clearAllMocks();
   });
 
   describe('Health Check Endpoint', () => {
@@ -436,7 +436,7 @@ describe('API Endpoints', () => {
     });
 
     afterEach(() => {
-      // Cleanup is handled by jest.setup.js
+      // Cleanup is handled by vi.setup.js
     });
 
     test('should authenticate with API token', async () => {

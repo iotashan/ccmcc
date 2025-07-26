@@ -8,4 +8,5 @@ process.env.JWT_SECRET = 'test-jwt-secret-for-testing-only';
 process.env.MOCK_CLAUDE_API = 'true';
 process.env.PORT = '0'; // Use random port for tests
 
-console.log('Test environment initialized with JWT_SECRET:', process.env.JWT_SECRET);
+// Suppress experimental warnings
+process.env.NODE_NO_WARNINGS = '1';

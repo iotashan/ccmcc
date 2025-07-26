@@ -1,5 +1,5 @@
 // tests/unit/client/handlers.test.js
-import { describe, test, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 
 describe('Client Message Handlers', () => {
   let mockWebSocket;
@@ -7,23 +7,23 @@ describe('Client Message Handlers', () => {
 
   beforeEach(() => {
     mockWebSocket = testUtils.createMockWebSocket();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     
     // Mock client-side handlers
     handlers = {
-      handleClaudeResponse: jest.fn(),
-      handleSessionAborted: jest.fn(),
-      handleShellOutput: jest.fn(),
-      handleMachineRegisterAck: jest.fn(),
-      handleHeartbeatAck: jest.fn(),
-      handleProjectList: jest.fn(),
-      handleError: jest.fn(),
-      handleRateLimit: jest.fn()
+      handleClaudeResponse: vi.fn(),
+      handleSessionAborted: vi.fn(),
+      handleShellOutput: vi.fn(),
+      handleMachineRegisterAck: vi.fn(),
+      handleHeartbeatAck: vi.fn(),
+      handleProjectList: vi.fn(),
+      handleError: vi.fn(),
+      handleRateLimit: vi.fn()
     };
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe('Claude Response Handlers', () => {
@@ -362,7 +362,7 @@ describe('Client Message Handlers', () => {
 
   describe('Handler Error Recovery', () => {
     test('should handle handler exceptions gracefully', () => {
-      const faultyHandler = jest.fn(() => {
+      const faultyHandler = vi.fn(() => {
         throw new Error('Handler crashed');
       });
 

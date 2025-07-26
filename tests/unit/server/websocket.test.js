@@ -1,7 +1,7 @@
 // tests/unit/server/websocket-simple.test.js
 // Simple tests for WebSocket functionality without full server setup
 
-import { describe, test, expect, beforeEach, jest } from '@jest/globals';
+import { describe, test, expect, beforeEach, vi } from 'vitest';
 import { EventEmitter } from 'events';
 
 describe('WebSocket Message Handling', () => {
@@ -14,11 +14,11 @@ describe('WebSocket Message Handling', () => {
       readyState: 1, // OPEN
       OPEN: 1,
       CLOSED: 3,
-      send: jest.fn(),
-      close: jest.fn(),
-      on: jest.fn(),
-      emit: jest.fn(),
-      terminate: jest.fn()
+      send: vi.fn(),
+      close: vi.fn(),
+      on: vi.fn(),
+      emit: vi.fn(),
+      terminate: vi.fn()
     };
 
     // Simple message handler that echoes or responds to specific types

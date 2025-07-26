@@ -1,21 +1,27 @@
 // tests/config/playwright.config.js
 import { defineConfig, devices } from '@playwright/test';
 
+const isDeveloperMode = process.env.DEVELOPER_MODE === 'true';
+const isCI = process.env.CI === 'true';
+
 export default defineConfig({
-  testDir: '../e2e/specs',
-  timeout: 30000,
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
-  fullyParallel: true,
-  forbidOnly: !!process.env.CI,
+  testDir: '../e2e',
+  timeout: isDeveloperMode ? 60000 : 30000, // Longer timeout for developer mode
+  retries: isCI ? 2 : 0,
+  workers: isCI ? 1 : undefined,
+  fullyParallel: !isDeveloperMode, // Disable parallel in developer mode for easier debugging
+  forbidOnly: !!isCI,
   
   use: {
-    baseURL: process.env.CLIENT_URL || 'http://localhost:3021',
-    trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
-    actionTimeout: 10000,
-    navigationTimeout: 30000,
+    baseURL: isDeveloperMode 
+      ? (process.env.CLIENT_URL || 'http://localhost:3021')
+      : (process.env.CLIENT_URL || 'http://client:3021'),
+    trace: isDeveloperMode ? 'on' : 'on-first-retry',
+    screenshot: isDeveloperMode ? 'on' : 'only-on-failure',
+    video: isDeveloperMode ? 'on' : 'retain-on-failure',
+    actionTimeout: isDeveloperMode ? 30000 : 10000,
+    navigationTimeout: isDeveloperMode ? 60000 : 30000,
+    headless: !isDeveloperMode, // Headed mode in developer mode
     
     // Custom test attributes
     testIdAttribute: 'data-testid',
@@ -25,15 +31,28 @@ export default defineConfig({
     
     // Browser context options
     contextOptions: {
-      ignoreHTTPSErrors: true,
-      permissions: ['clipboard-read', 'clipboard-write']
+      ignoreHTTPSErrors: true
     }
   },
 
   projects: [
+    // Authentication setup project (runs first)
+    {
+      name: 'setup',
+      testMatch: '**/setup/*.setup.js',
+      use: {
+        storageState: undefined, // No auth state for setup
+        baseURL: isDeveloperMode 
+          ? (process.env.CLIENT_URL || 'http://localhost:3021')
+          : (process.env.CLIENT_URL || 'http://localhost:3021'), // Use host networking for both modes
+      }
+    },
+
     // Desktop browsers
     {
       name: 'chromium-desktop',
+      dependencies: ['setup'],
+      testIgnore: '**/setup/*.setup.js',
       use: { 
         ...devices['Desktop Chrome'],
         viewport: { width: 1280, height: 720 },
@@ -42,6 +61,8 @@ export default defineConfig({
     },
     {
       name: 'firefox-desktop',
+      dependencies: ['setup'],
+      testIgnore: '**/setup/*.setup.js',
       use: { 
         ...devices['Desktop Firefox'],
         viewport: { width: 1280, height: 720 },
@@ -50,6 +71,8 @@ export default defineConfig({
     },
     {
       name: 'webkit-desktop',
+      dependencies: ['setup'],
+      testIgnore: '**/setup/*.setup.js',
       use: { 
         ...devices['Desktop Safari'],
         viewport: { width: 1280, height: 720 },
@@ -60,6 +83,8 @@ export default defineConfig({
     // Mobile browsers
     {
       name: 'mobile-chrome',
+      dependencies: ['setup'],
+      testIgnore: '**/setup/*.setup.js',
       use: { 
         ...devices['Pixel 5'],
         hasTouch: true,
@@ -68,21 +93,15 @@ export default defineConfig({
     },
     {
       name: 'mobile-safari',
+      dependencies: ['setup'],
+      testIgnore: '**/setup/*.setup.js',
       use: { 
         ...devices['iPhone 12'],
         hasTouch: true,
         storageState: 'tests/e2e/fixtures/.auth/user.json'
       },
     },
-    
-    // Authentication setup project
-    {
-      name: 'setup',
-      testMatch: /.*\.setup\.js/,
-      use: {
-        storageState: undefined
-      }
-    }
+
   ],
 
   // Global setup/teardown
@@ -90,30 +109,30 @@ export default defineConfig({
   // globalTeardown: './global-teardown',
 
   // Folder for test artifacts
-  outputDir: '/app/test-results/artifacts',
+  outputDir: './test-results/artifacts',
 
   // Reporter configuration
   reporter: [
     ['list'],
     ['html', { 
-      open: 'never',
-      outputFolder: '/app/test-results/playwright-report'
+      open: isDeveloperMode ? 'on-failure' : 'never',
+      outputFolder: './test-results/playwright-report'
     }],
     ['json', { 
-      outputFile: '/app/test-results/report.json' 
+      outputFile: './test-results/report.json'
     }],
     ['junit', { 
-      outputFile: '/app/test-results/junit.xml' 
+      outputFile: './test-results/junit.xml'
     }],
-    process.env.CI ? ['github'] : null,
+    isCI ? ['github'] : null,
   ].filter(Boolean),
 
   // Web server configuration for local testing
-  webServer: process.env.CI ? undefined : {
+  webServer: (isCI || isDeveloperMode) ? undefined : {
     command: 'npm run dev',
     port: 3021,
     timeout: 120 * 1000,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: !isCI,
   },
 
   // Advanced options

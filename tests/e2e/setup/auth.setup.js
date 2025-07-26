@@ -1,0 +1,213 @@
+// tests/e2e/setup/auth.setup.js
+import { test, expect } from '@playwright/test';
+import { getServerURL, getBaseURL, isDeveloperMode, pauseBeforeNavigation, pauseBeforeClose, logTestMode } from '../../helpers/developer-utils.js';
+import fs from 'fs/promises';
+import path from 'path';
+
+// Test credentials
+const TEST_USER = {
+  username: process.env.TEST_USER_USERNAME || 'testuser',
+  password: process.env.TEST_USER_PASSWORD || 'testpass123',
+  email: process.env.TEST_USER_EMAIL || 'testuser@example.com'
+};
+
+// File paths
+const AUTH_STATE_FILE = 'tests/e2e/fixtures/.auth/user.json';
+const CREDENTIALS_FILE = '/tmp/test-credentials.env';
+
+test.describe('Authentication Setup', () => {
+  test.beforeAll(() => {
+    logTestMode();
+  });
+
+  test('setup test account and save authentication state', async ({ page }) => {
+    const serverUrl = getServerURL();
+    const baseUrl = getBaseURL();
+    
+    console.log(`🔧 Setting up test account...`);
+    console.log(`   Server URL: ${serverUrl}`);
+    console.log(`   Client URL: ${baseUrl}`);
+    console.log(`   Test User: ${TEST_USER.username}`);
+    
+    // Step 1: Check if server needs setup
+    console.log('📡 Checking server setup status...');
+    
+    let needsSetup = false;
+    try {
+      const statusResponse = await fetch(`${serverUrl}/api/auth/status`);
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json();
+        needsSetup = statusData.needsSetup;
+        console.log(`   Setup required: ${needsSetup}`);
+      } else {
+        console.log(`   Status check failed: ${statusResponse.status}`);
+        // Assume setup is needed if we can't check
+        needsSetup = true;
+      }
+    } catch (error) {
+      console.log(`   Status check error: ${error.message}`);
+      // Assume setup is needed if we can't reach the server
+      needsSetup = true;
+    }
+
+    // Step 2: Navigate to the appropriate page
+    console.log('🌐 Navigating to web interface...');
+    await page.goto(baseUrl);
+    await page.waitForLoadState('networkidle');
+    
+    // Pause for developer observation
+    await pauseBeforeNavigation(page);
+
+    let jwtToken = null;
+
+    if (needsSetup) {
+      console.log('🔧 Performing initial setup...');
+      
+      // Should be on setup page
+      await expect(page.locator('h1')).toContainText('Welcome to Claude Code UI');
+      
+      // Fill setup form
+      await page.fill('input[name="username"]', TEST_USER.username);
+      await page.fill('input[name="new-password"]', TEST_USER.password);
+      await page.fill('input[name="confirm-password"]', TEST_USER.password);
+      
+      // Submit setup form
+      await page.click('button[type="submit"]');
+      
+      // Wait for setup to complete and redirect to dashboard
+      await page.waitForURL('**/dashboard', { timeout: 10000 });
+      
+      console.log('✅ Setup completed successfully');
+      
+    } else {
+      console.log('🔑 Logging in with existing account...');
+      
+      // Should be on login page or redirected there
+      const currentUrl = page.url();
+      if (!currentUrl.includes('/login')) {
+        await page.goto(`${baseUrl}/login`);
+        await page.waitForLoadState('networkidle');
+      }
+      
+      // Wait for login form to be visible
+      await expect(page.locator('[data-testid="auth-login-form"]')).toBeVisible();
+      
+      // Fill login form using test IDs
+      await page.fill('[data-testid="auth-username-input"]', TEST_USER.username);
+      await page.fill('[data-testid="auth-password-input"]', TEST_USER.password);
+      
+      // Submit login form
+      await page.click('[data-testid="auth-sign-in-button"]');
+      
+      // Wait for login to complete and redirect to dashboard
+      await page.waitForURL('**/dashboard', { timeout: 10000 });
+      
+      console.log('✅ Login completed successfully');
+    }
+
+    // Step 3: Extract JWT token from localStorage
+    console.log('🔑 Extracting authentication token...');
+    
+    jwtToken = await page.evaluate(() => {
+      return localStorage.getItem('auth-token');
+    });
+    
+    if (!jwtToken) {
+      throw new Error('Failed to extract JWT token from localStorage');
+    }
+    
+    console.log(`   Token extracted: ${jwtToken.substring(0, 20)}...`);
+
+    // Step 4: Save authentication state for other tests
+    console.log('💾 Saving authentication state...');
+    
+    // Ensure the auth directory exists
+    const authDir = path.dirname(AUTH_STATE_FILE);
+    await fs.mkdir(authDir, { recursive: true });
+    
+    // Save the storage state (includes localStorage with token)
+    await page.context().storageState({ path: AUTH_STATE_FILE });
+    
+    console.log(`   Auth state saved to: ${AUTH_STATE_FILE}`);
+
+    // Step 5: Save credentials for client container
+    console.log('📝 Saving credentials for client container...');
+    
+    const credentialsContent = `# Test credentials generated by auth.setup.js
+export CLIENT_API_TOKEN="${jwtToken}"
+export TEST_USER_EMAIL="${TEST_USER.email}"
+export TEST_USER_PASSWORD="${TEST_USER.password}"
+export TEST_USER_USERNAME="${TEST_USER.username}"
+export SERVER_URL="${serverUrl}"
+export JWT_TOKEN="${jwtToken}"
+`;
+    
+    await fs.writeFile(CREDENTIALS_FILE, credentialsContent, { mode: 0o600 });
+    console.log(`   Credentials saved to: ${CREDENTIALS_FILE}`);
+
+    // Step 6: Verify authentication works
+    console.log('✅ Verifying authentication...');
+    
+    // Check that we're on the dashboard
+    await expect(page.locator('h1, h2, [data-testid*="dashboard"]')).toBeVisible();
+    
+    // Verify we can make authenticated API calls
+    const userResponse = await page.evaluate(async (serverUrl) => {
+      const token = localStorage.getItem('auth-token');
+      const response = await fetch(`${serverUrl}/api/auth/user`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      return {
+        ok: response.ok,
+        status: response.status,
+        data: response.ok ? await response.json() : null
+      };
+    }, serverUrl);
+    
+    if (!userResponse.ok) {
+      throw new Error(`Authentication verification failed: ${userResponse.status}`);
+    }
+    
+    console.log(`   User verified: ${userResponse.data.user.username}`);
+
+    // Pause before closing in developer mode
+    await pauseBeforeClose(page);
+    
+    console.log('🎉 Authentication setup completed successfully!');
+    console.log(`   - User: ${TEST_USER.username}`);
+    console.log(`   - Auth state: ${AUTH_STATE_FILE}`);
+    console.log(`   - Credentials: ${CREDENTIALS_FILE}`);
+    console.log(`   - Token: ${jwtToken.substring(0, 20)}...`);
+  });
+
+  test('verify saved authentication state works', async ({ page }) => {
+    console.log('🔍 Verifying saved authentication state...');
+    
+    const baseUrl = getBaseURL();
+    
+    // Load the saved authentication state
+    const authStateExists = await fs.access(AUTH_STATE_FILE).then(() => true).catch(() => false);
+    if (!authStateExists) {
+      throw new Error(`Authentication state file not found: ${AUTH_STATE_FILE}`);
+    }
+    
+    // Navigate to dashboard (should work with saved auth state)
+    await page.goto(`${baseUrl}/dashboard`);
+    await page.waitForLoadState('networkidle');
+    
+    // Should be authenticated and on dashboard
+    await expect(page.locator('h1, h2, [data-testid*="dashboard"]')).toBeVisible({ timeout: 5000 });
+    
+    // Verify token exists in localStorage
+    const token = await page.evaluate(() => localStorage.getItem('auth-token'));
+    expect(token).toBeTruthy();
+    
+    console.log('✅ Saved authentication state works correctly');
+    
+    // Pause before closing in developer mode
+    await pauseBeforeClose(page);
+  });
+});

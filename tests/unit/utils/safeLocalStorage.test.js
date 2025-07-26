@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import { safeLocalStorage } from '../../../src/utils/safeLocalStorage.js';
 
 describe('safeLocalStorage', () => {
@@ -10,20 +10,20 @@ describe('safeLocalStorage', () => {
     // Mock localStorage
     mockLocalStorage = {
       storage: {},
-      getItem: jest.fn((key) => mockLocalStorage.storage[key] || null),
-      setItem: jest.fn((key, value) => {
+      getItem: vi.fn((key) => mockLocalStorage.storage[key] || null),
+      setItem: vi.fn((key, value) => {
         mockLocalStorage.storage[key] = value;
       }),
-      removeItem: jest.fn((key) => {
+      removeItem: vi.fn((key) => {
         delete mockLocalStorage.storage[key];
       }),
-      clear: jest.fn(() => {
+      clear: vi.fn(() => {
         mockLocalStorage.storage = {};
       }),
       get length() {
         return Object.keys(mockLocalStorage.storage).length;
       },
-      key: jest.fn((index) => {
+      key: vi.fn((index) => {
         const keys = Object.keys(mockLocalStorage.storage);
         return keys[index] || null;
       })
@@ -34,24 +34,24 @@ describe('safeLocalStorage', () => {
     Object.keys(mockLocalStorage.storage).forEach(key => delete mockLocalStorage.storage[key]);
 
     // Spy on console methods
-    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+    consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation();
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation();
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     consoleWarnSpy.mockRestore();
     consoleErrorSpy.mockRestore();
   });
 
   describe('setItem', () => {
-    it('should store items normally when quota is not exceeded', () => {
+    test('should store items normally when quota is not exceeded', () => {
       safeLocalStorage.setItem('test_key', 'test_value');
       expect(mockLocalStorage.setItem).toHaveBeenCalledWith('test_key', 'test_value');
       expect(mockLocalStorage.storage['test_key']).toBe('test_value');
     });
 
-    it('should truncate chat messages to 50 when storing', () => {
+    test('should truncate chat messages to 50 when storing', () => {
       const messages = Array(100).fill(null).map((_, i) => ({ id: i, content: `Message ${i}` }));
       const messagesJson = JSON.stringify(messages);
       
@@ -68,7 +68,7 @@ describe('safeLocalStorage', () => {
       expect(storedMessages[49].id).toBe(99);
     });
 
-    it('should handle QuotaExceededError by clearing old chat data', () => {
+    test('should handle QuotaExceededError by clearing old chat data', () => {
       // Set up initial chat data for multiple projects
       mockLocalStorage.storage['chat_messages_project1'] = JSON.stringify([{ id: 1 }]);
       mockLocalStorage.storage['chat_messages_project2'] = JSON.stringify([{ id: 2 }]);
@@ -79,7 +79,7 @@ describe('safeLocalStorage', () => {
       // Mock setItem to throw QuotaExceededError on first call
       const originalSetItem = mockLocalStorage.setItem;
       let callCount = 0;
-      mockLocalStorage.setItem = jest.fn((key, value) => {
+      mockLocalStorage.setItem = vi.fn((key, value) => {
         callCount++;
         if (callCount === 1) {
           const error = new Error('QuotaExceededError');
@@ -91,7 +91,7 @@ describe('safeLocalStorage', () => {
 
       // Mock Object.keys to return our storage keys
       const originalObjectKeys = Object.keys;
-      Object.keys = jest.fn((obj) => {
+      Object.keys = vi.fn((obj) => {
         if (obj === localStorage) {
           return originalObjectKeys(mockLocalStorage.storage);
         }
@@ -108,12 +108,12 @@ describe('safeLocalStorage', () => {
       Object.keys = originalObjectKeys;
     });
 
-    it('should fall back to storing only 10 messages on persistent quota errors', () => {
+    test('should fall back to storing only 10 messages on persistent quota errors', () => {
       const messages = Array(30).fill(null).map((_, i) => ({ id: i, content: `Message ${i}` }));
       const messagesJson = JSON.stringify(messages);
       
       // Mock setItem to always throw QuotaExceededError
-      mockLocalStorage.setItem = jest.fn(() => {
+      mockLocalStorage.setItem = vi.fn(() => {
         const error = new Error('QuotaExceededError');
         error.name = 'QuotaExceededError';
         throw error;
@@ -121,12 +121,12 @@ describe('safeLocalStorage', () => {
 
       // Mock Object.keys for the cleanup attempt
       const originalObjectKeys = Object.keys;
-      Object.keys = jest.fn(() => []);
+      Object.keys = vi.fn(() => []);
 
       // Create a counter to track setItem calls
       let setItemCallCount = 0;
       const originalSetItem = mockLocalStorage.setItem;
-      mockLocalStorage.setItem = jest.fn((key, value) => {
+      mockLocalStorage.setItem = vi.fn((key, value) => {
         setItemCallCount++;
         if (setItemCallCount <= 2) {
           const error = new Error('QuotaExceededError');
@@ -148,8 +148,8 @@ describe('safeLocalStorage', () => {
       Object.keys = originalObjectKeys;
     });
 
-    it('should handle non-quota errors gracefully', () => {
-      mockLocalStorage.setItem = jest.fn(() => {
+    test('should handle non-quota errors gracefully', () => {
+      mockLocalStorage.setItem = vi.fn(() => {
         throw new Error('Some other error');
       });
 
@@ -160,7 +160,7 @@ describe('safeLocalStorage', () => {
   });
 
   describe('getItem', () => {
-    it('should retrieve items normally', () => {
+    test('should retrieve items normally', () => {
       mockLocalStorage.storage['test_key'] = 'test_value';
       
       const result = safeLocalStorage.getItem('test_key');
@@ -169,8 +169,8 @@ describe('safeLocalStorage', () => {
       expect(mockLocalStorage.getItem).toHaveBeenCalledWith('test_key');
     });
 
-    it('should handle errors gracefully and return null', () => {
-      mockLocalStorage.getItem = jest.fn(() => {
+    test('should handle errors gracefully and return null', () => {
+      mockLocalStorage.getItem = vi.fn(() => {
         throw new Error('Storage error');
       });
 
@@ -182,7 +182,7 @@ describe('safeLocalStorage', () => {
   });
 
   describe('removeItem', () => {
-    it('should remove items normally', () => {
+    test('should remove items normally', () => {
       mockLocalStorage.storage['test_key'] = 'test_value';
       
       safeLocalStorage.removeItem('test_key');
@@ -191,8 +191,8 @@ describe('safeLocalStorage', () => {
       expect(mockLocalStorage.storage['test_key']).toBeUndefined();
     });
 
-    it('should handle errors gracefully', () => {
-      mockLocalStorage.removeItem = jest.fn(() => {
+    test('should handle errors gracefully', () => {
+      mockLocalStorage.removeItem = vi.fn(() => {
         throw new Error('Remove error');
       });
 
@@ -203,14 +203,14 @@ describe('safeLocalStorage', () => {
   });
 
   describe('draft cleanup', () => {
-    it('should clean up draft inputs when quota is exceeded', () => {
+    test('should clean up draft inputs when quota is exceeded', () => {
       // Set up draft data
       mockLocalStorage.storage['draft_input_project1'] = 'draft text 1';
       mockLocalStorage.storage['draft_input_project2'] = 'draft text 2';
       
       // Mock setItem to throw QuotaExceededError on first call
       let callCount = 0;
-      mockLocalStorage.setItem = jest.fn((key, value) => {
+      mockLocalStorage.setItem = vi.fn((key, value) => {
         callCount++;
         if (callCount === 1) {
           const error = new Error('QuotaExceededError');
@@ -222,7 +222,7 @@ describe('safeLocalStorage', () => {
 
       // Mock Object.keys
       const originalObjectKeys = Object.keys;
-      Object.keys = jest.fn(() => ['draft_input_project1', 'draft_input_project2']);
+      Object.keys = vi.fn(() => ['draft_input_project1', 'draft_input_project2']);
 
       safeLocalStorage.setItem('new_key', 'new_value');
 

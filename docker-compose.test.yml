@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Server service - handles API and WebSocket connections
   server:
@@ -8,6 +6,7 @@ services:
       dockerfile: Dockerfile.test
       target: server
     container_name: claudecodeui-test-server
+    profiles: ["ci", "developer"]
     environment:
       - NODE_ENV=test
       - JWT_SECRET=${JWT_SECRET}
@@ -39,6 +38,34 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  # Server initializer - creates test user and API key
+  server-init:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+      target: base
+    container_name: claudecodeui-test-init
+    profiles: ["ci", "developer"]
+    environment:
+      - SERVER_URL=http://server:3020
+      - TEST_USER_EMAIL=${TEST_USER_EMAIL:-testuser@example.com}
+      - TEST_USER_PASSWORD=${TEST_USER_PASSWORD:-testpass123}
+      - TEST_USER_USERNAME=${TEST_USER_USERNAME:-testuser}
+    volumes:
+      - ./scripts:/scripts:ro
+      - test-credentials:/credentials
+    depends_on:
+      server:
+        condition: service_healthy
+    networks:
+      - test-net
+    command: >
+      sh -c "
+        /scripts/init-test-server.sh /credentials/test.env &&
+        echo 'Initialization complete' &&
+        tail -f /dev/null
+      "
+
   # Client service - connects to server
   client:
     build:
@@ -46,10 +73,11 @@ services:
       dockerfile: Dockerfile.test
       target: client
     container_name: claudecodeui-test-client
+    profiles: ["ci", "developer"]
     environment:
       - NODE_ENV=test
       - SERVER_URL=http://server:3020
-      - CLIENT_API_TOKEN=${CLIENT_API_TOKEN}
+      - CLIENT_API_TOKEN_FILE=/credentials/test.env
       - CLIENT_PORT=${CLIENT_PORT:-3021}
       - MACHINE_NAME=${MACHINE_NAME:-test-machine-1}
       - TEST_USER_EMAIL=${TEST_USER_EMAIL:-testuser@example.com}
@@ -61,12 +89,22 @@ services:
       - ./client:/app/client:ro
       - ./shared:/app/shared:ro
       - client-projects:/projects
+      - test-credentials:/credentials:ro
+    ports:
+      - "${CLIENT_PORT:-3021}:3021"
     depends_on:
-      server:
-        condition: service_healthy
+      server-init:
+        condition: service_started
     networks:
       - test-net
     restart: unless-stopped
+    command: >
+      sh -c "
+        if [ -f /credentials/test.env ]; then
+          . /credentials/test.env
+        fi &&
+        npm run client
+      "
 
   # Test runner - executes all tests
   test-runner:
@@ -75,6 +113,7 @@ services:
       dockerfile: Dockerfile.test
       target: test-runner
     container_name: claudecodeui-test-runner
+    profiles: ["ci"]
     environment:
       - NODE_ENV=test
       - SERVER_URL=http://server:3020
@@ -104,8 +143,12 @@ services:
       - coverage-data:/app/coverage
       - playwright-cache:/ms-playwright
     depends_on:
-      - server
-      - client
+      server:
+        condition: service_healthy
+      server-init:
+        condition: service_started
+      client:
+        condition: service_started
     networks:
       - test-net
     command: >
@@ -113,7 +156,13 @@ services:
         echo 'Waiting for services to be ready...' &&
         sleep 10 &&
         echo 'Starting test execution...' &&
-        npm run test:all
+        if [ -n \"$TEST_PATTERN\" ]; then
+          echo 'Running tests matching pattern: $TEST_PATTERN' &&
+          npx playwright test --config=tests/config/playwright.config.js --grep \"$TEST_PATTERN\"
+        else
+          echo 'Running all E2E tests...' &&
+          npx playwright test --config=tests/config/playwright.config.js
+        fi
       "
 
   # Test data generator (runs once to prepare data)
@@ -146,7 +195,7 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: 172.20.0.0/16
+        - subnet: 172.25.0.0/16
 
 # Volumes
 volumes:
@@ -163,6 +212,8 @@ volumes:
   coverage-data:
     driver: local
   playwright-cache:
+    driver: local
+  test-credentials:
     driver: local
 
 # Extension fields for common configurations
