@@ -448,13 +448,14 @@ function ChatInterface({
     
     // Send message via WebSocket
     sendMessage({
-      action: 'sendMessage',
-      projectPath: selectedProject.path,
-      message: messageText,
-      permissionMode,
-      sessionId: currentSessionId,
-      mode: permissionMode,
-      images: userMessage.images
+      type: 'claude-command',
+      command: messageText,
+      options: {
+        projectPath: selectedProject.path,
+        sessionId: currentSessionId,
+        permissionMode: permissionMode,
+        images: userMessage.images
+      }
     });
   };
 

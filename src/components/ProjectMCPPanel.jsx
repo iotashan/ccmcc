@@ -37,6 +37,7 @@ function ProjectMCPPanel({ selectedProject, selectedMachine }) {
   }, [selectedProject]);
 
   const loadProjectMcpConfig = async () => {
+    if (!selectedProject?.id) return;
     try {
       setIsLoading(true);
       const response = await api.get(`/api/projects/${selectedProject.id}/mcp`);
@@ -53,6 +54,7 @@ function ProjectMCPPanel({ selectedProject, selectedMachine }) {
   };
 
   const loadUserMcpServers = async () => {
+    if (!selectedProject?.id) return;
     try {
       const response = await api.get(`/api/projects/${selectedProject.id}/mcp/discover`);
       if (response.ok) {
@@ -65,6 +67,7 @@ function ProjectMCPPanel({ selectedProject, selectedMachine }) {
   };
 
   const saveProjectMcpConfig = async () => {
+    if (!selectedProject?.id) return;
     try {
       setIsSaving(true);
       const response = await api.put(`/api/projects/${selectedProject.id}/mcp`, {
@@ -142,6 +145,7 @@ function ProjectMCPPanel({ selectedProject, selectedMachine }) {
   };
 
   const handleImportServers = async (selectedServerNames) => {
+    if (!selectedProject?.id) return;
     try {
       const response = await api.post(`/api/projects/${selectedProject.id}/mcp/import`, {
         serverNames: selectedServerNames

@@ -123,7 +123,7 @@ router.post('/commit', async (req, res) => {
     const projectPath = await getActualProjectPath(project);
     
     // Validate git repository
-    await validateGitRepository(projectPath);
+    await validateGitRepository(projectPath, fs, execAsync);
     
     // Stage selected files
     for (const file of files) {
@@ -153,7 +153,7 @@ router.get('/branches', async (req, res) => {
     console.log('Git branches for project:', project, '-> path:', projectPath);
     
     // Validate git repository
-    await validateGitRepository(projectPath);
+    await validateGitRepository(projectPath, fs, execAsync);
     
     // Get all branches
     const { stdout } = await execAsync('git branch -a', { cwd: projectPath });
@@ -673,7 +673,7 @@ router.post('/discard', async (req, res) => {
 
   try {
     const projectPath = await getActualProjectPath(project);
-    await validateGitRepository(projectPath);
+    await validateGitRepository(projectPath, fs, execAsync);
 
     // Check file status to determine correct discard command
     const { stdout: statusOutput } = await execAsync(`git status --porcelain "${file}"`, { cwd: projectPath });
@@ -712,7 +712,7 @@ router.post('/delete-untracked', async (req, res) => {
 
   try {
     const projectPath = await getActualProjectPath(project);
-    await validateGitRepository(projectPath);
+    await validateGitRepository(projectPath, fs, execAsync);
 
     // Check if file is actually untracked
     const { stdout: statusOutput } = await execAsync(`git status --porcelain "${file}"`, { cwd: projectPath });
